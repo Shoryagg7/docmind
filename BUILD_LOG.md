@@ -117,3 +117,17 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Resume claim earned:** extends the Unit 8 claim — can now say the semantic search understanding includes *when* an index gets used, not just that pgvector supports one: **"...and can explain the exact-vs-approximate-index trade-off with an observed query-plan comparison, not just in theory."**
 
 **Phase 3 complete.** Code track (pgvector schema, top-k search) and concept track (vector indexes, HNSW vs exact) both built and observed with real evidence.
+
+---
+
+## Unit 10 — Naive RAG end-to-end (batched: synthesis + FastAPI app)
+
+- **Concept touched:** prompt construction, grounding, citations. Batched implementation at developer's request — process granularity relaxed (fewer approval checkpoints), rigor kept (tests, concept explanation, real HTTP validation).
+- **Files changed:** `services/rag.py` (new), `services/llm_client.py` (added `system` param), `core/errors.py` (new: `DocMindError`, `InvalidPDFError`), `services/pdf_extractor.py` (wraps `PdfReadError`), `main.py` (new FastAPI app), `schemas/query.py` + `schemas/document.py` (new), `routers/documents.py` + `routers/query.py` (new), `core/db.py` (added `get_session`), `tests/fixtures/sample.pdf` (regenerated with real bio content), `tests/test_pdf_extractor.py` + `tests/test_ingest.py` (updated assertions, added `InvalidPDFError` test), `requirements.txt` (added `fastapi`, `uvicorn[standard]`, `python-multipart`, `httpx`).
+- **Design decision:** citations are prompt-instructed, not structurally verified — a known, stated limitation, not an oversight. `generate()` now takes messages as proper system/user roles instead of one concatenated string, matching how chat models are actually meant to be prompted.
+- **Test/command run:** `.venv/bin/python -m pytest -v` (17/17); real server run via `uvicorn main:app --port 8001` with `curl` against all three endpoints.
+- **Observed behavior:** end-to-end HTTP round trip worked — upload → `chunks_stored: 1`; query *"What is the name of this person?"* → `"The person's name is Aria Kapoor. [1]"` with correct source attached; out-of-context query *"What is the capital of France?"* → `"I don't know."` (grounding held); corrupted upload → clean `400`, no leaked stack trace.
+- **Failure mode discovered:** port 8000 was already occupied by an unrelated, pre-existing DeliverIQ Docker container on this machine. The first `uvicorn` run failed to bind and exited immediately, but a `curl` against port 8000 still returned `200 {"status":"ok"}` — from DeliverIQ's own health check, not ours — because the port was serving a different app entirely. A passing-looking curl response is not proof your own server is the one answering; checking the actual server log caught it. Fixed by using port 8001.
+- **Resume claim earned:** **"Built a naive RAG system end-to-end over FastAPI: PDF upload, chunking, embedding, pgvector retrieval, and LLM-generated answers with source citations, with verified grounding behavior."** First time the whole system has been exercised as a real running service rather than only through unit tests and Python REPL calls.
+
+**Phase 4 code complete.** Concept notes (prompting, grounding, citations) next.

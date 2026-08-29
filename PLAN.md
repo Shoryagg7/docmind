@@ -9,7 +9,7 @@ Agentic RAG document assistant. Built one small, observable unit at a time per `
 | 1 | Embeddings, cosine similarity | Skeleton, config, Groq client | Done |
 | 2 | Chunking strategy and trade-offs | PDF ingest, chunker | Done |
 | 3 | Vector indexes, HNSW vs exact | pgvector schema, top-k search | Done |
-| 4 | Prompting, grounding, citations | Naive RAG end-to-end | Not started |
+| 4 | Prompting, grounding, citations | Naive RAG end-to-end | Done |
 | 5 | Chains vs graphs, state, reducers | LangGraph rewrite | Not started |
 | 6 | Self-correction, bounded loops | Relevance grader + query rewrite | Not started |
 | 7 | Eval methodology, LLM-as-judge | 25-question golden set | Not started |
@@ -122,3 +122,28 @@ Units are logged here as they're completed. See `BUILD_LOG.md` for the detailed 
 ## Remaining work (current phase)
 
 **Phase 3 complete.** Code track (pgvector schema, top-k search) and concept track (vector indexes, HNSW vs exact) both built and observed with real evidence, not just discussed. Concept notes for Phase 3 (embeddings-in-practice negation gotcha already covered in §1; cosine similarity in §2) plus the new exact-vs-HNSW material go into `Interview_prep.md` §4 next.
+
+### Unit 10 — Naive RAG end-to-end (batched: synthesis + FastAPI app)
+
+Built as one consolidated unit rather than several separate approvals, at the developer's explicit request to move faster on implementation granularity (concept explanations and testing rigor kept; per-file approval checkpoints dropped for this unit onward).
+
+- **What:**
+  - `services/rag.py` — `answer_question(session, query, k=3) -> {answer, sources}`: retrieves top-k chunks, builds a grounded prompt (explicit "answer only from context, cite [n]" instruction), calls Groq, returns answer + numbered sources.
+  - `services/llm_client.py` — `generate()` extended with an optional `system` parameter (proper system/user role separation instead of concatenating everything into one user message).
+  - `core/errors.py` (new) — `DocMindError` base, `InvalidPDFError`. `services/pdf_extractor.py` now catches `pypdf.errors.PdfReadError` and re-raises as `InvalidPDFError`, per the "no bare generic exceptions for expected application failures" convention.
+  - `main.py` (new) — FastAPI app with `/health`, `POST /documents` (upload → ingest → embed → store), `POST /query` (ask → retrieve → generate → cite).
+  - `schemas/query.py`, `schemas/document.py` (new) — request/response models.
+  - `routers/documents.py`, `routers/query.py` (new) — thin route handlers; upload catches `InvalidPDFError` → clean `400`.
+  - `core/db.py` — added `get_session()` FastAPI dependency (shared by both routers).
+  - Regenerated `tests/fixtures/sample.pdf` with an actual bio (name, background) instead of placeholder text, so retrieval/generation could be tested meaningfully; updated `tests/test_pdf_extractor.py` and `tests/test_ingest.py` assertions to match; added a test for the new `InvalidPDFError` path.
+  - `requirements.txt` — added `fastapi`, `uvicorn[standard]`, `python-multipart`, `httpx`.
+- **Why:** the actual "naive RAG end-to-end" deliverable of Phase 4, and the first point the system is usable as a real HTTP service instead of only importable Python functions.
+- **Command used:** `.venv/bin/python -m pytest -v`; then real HTTP testing — `.venv/bin/uvicorn main:app --port 8001` (8000 was occupied by an unrelated DeliverIQ container) plus `curl` against `/health`, `POST /documents`, and `POST /query`.
+- **Observed result:** 17/17 tests passed. Real HTTP round trip: uploaded the bio PDF (`chunks_stored: 1`), asked *"What is the name of this person?"* → `"The person's name is Aria Kapoor. [1]"` with the correct source chunk attached. Asked an out-of-context question (*"What is the capital of France?"*) → `"I don't know."` — grounding held, no hallucination despite an LLM that certainly knows Paris. Uploaded a corrupted file → clean `400` with a readable message, no stack trace leaked.
+- **Design decision:** citations are prompt-instructed only, not structurally verified — the LLM could still cite a chunk that doesn't say what it claims, and nothing here checks that. `search()` still has no relevance/similarity threshold, so an irrelevant top-1 chunk gets shown to the LLM as "context" regardless of how weak the match is (Phase 9's locked scope item); grounding currently relies entirely on the LLM honoring the instruction, not a hard cutoff.
+- **Failure mode discovered:** port 8000 was already bound by an unrelated, already-running DeliverIQ Docker container on this machine — our first `uvicorn` attempt failed to bind (`[Errno 98] address already in use`) and exited silently in the background, while a `curl` against port 8000 kept "succeeding" because it was actually hitting DeliverIQ's health check the entire time, not ours. Caught by checking the actual server log rather than trusting a 200 response; fixed by moving to port 8001.
+- **Resume claim earned:** **"Built a naive RAG system end-to-end over FastAPI: PDF upload, chunking, embedding, pgvector retrieval, and LLM-generated answers with source citations, with verified grounding behavior (refuses out-of-context questions instead of hallucinating)."** Earned now — this was tested as a real running HTTP service, not just unit-tested functions.
+
+## Remaining work (current phase)
+
+**Phase 4 complete.** Code track (naive RAG end-to-end) observed via real HTTP calls; concept track (prompting, grounding, citations) written in `Interview_prep.md` §5. Next: Phase 5 — LangGraph rewrite (chains vs. graphs, state, reducers), wrapping the retrieve→generate loop just built into an explicit graph — still pending its own proposal/approval.

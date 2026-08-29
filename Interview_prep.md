@@ -109,3 +109,30 @@ The single most dangerous failure mode I hit in this whole phase wasn't the inde
 - What does pgvector's `<=>` operator actually return, and what happens — silently — if you sort by it in the wrong direction?
 - Why does an HNSW index need its operator class (e.g. `vector_cosine_ops`) to match the distance function used in the query, and what happens if they don't match?
 - At what point (roughly, and why) would you expect exact search to become a real bottleneck for DocMind, given the corpus sizes a portfolio project actually deals with?
+
+---
+
+## 5. Grounding and Citations via Prompt Construction
+
+**What it is**
+Grounding means constraining an LLM's answer to only use information that was actually retrieved and handed to it in the prompt, instead of freely drawing on whatever it memorized during pretraining. There's no special API flag for this — it's done by instruction: the system prompt explicitly tells the model "answer only from the provided context; if the context doesn't contain the answer, say you don't know," and the retrieved chunks are pasted into the prompt, numbered, so the model can reference them. Citations are the model tagging each claim with which numbered chunk it came from (`[1]`, `[2]`), so a reader can trace an answer back to its source instead of trusting it blindly. Both are prompt-engineering techniques, not architectural guarantees — the model is *asked* to behave this way, not *forced* to.
+
+**Why we chose it**
+Requirement: answers need to be traceable to actual document content, and the system needs to visibly refuse to answer when the retrieved context doesn't actually contain the answer, rather than confidently making something up.
+Choice: a system prompt with an explicit grounding instruction + numbered context chunks + a "cite [n]" instruction, sent via proper system/user message roles to the LLM.
+Benefit: cheap to implement (no extra infrastructure, no fine-tuning), and it visibly works — asking "what is the capital of France?" against a document that only contains a person's bio correctly returned "I don't know," even though the underlying model obviously knows the answer from pretraining. That's the grounding instruction actively overriding the model's own knowledge.
+Cost: it's an instruction, not a constraint. Nothing in this system verifies that a cited chunk actually says what the model claims it says, or that the model didn't quietly blend in outside knowledge anyway. At this stage, trustworthiness of citations rests entirely on the model choosing to comply.
+Rejected alternative: structured/function-call output (forcing the model to return citations as a validated JSON schema referencing real chunk IDs) or a separate verification pass that checks each claim against its cited chunk. Rejected for the naive-RAG phase because it adds real complexity (schema validation, a second LLM call or a claim-matching heuristic) before the basic retrieve→prompt→generate loop has even been observed working once — exactly the "framework abstractions after the mechanism is understood" rule from `CLAUDE.md`. Worth revisiting if citation reliability becomes the thing being evaluated (Phase 7).
+
+**Soundbite**
+"Grounding means I tell the model, explicitly, in the system prompt: only answer from the context I'm giving you, and if it's not in there, say you don't know. I proved this actually works, not just that I wrote the instruction — I asked a question with no answer in the retrieved document and got 'I don't know' back, even though the model obviously knows the real answer from pretraining. Citations are the same idea: each retrieved chunk gets a number, and the model has to tag which chunk each claim came from. It's honest to say this is instruction-based, not enforced — nothing here verifies the model didn't fudge a citation, and that's a real limitation I'd want to address before trusting this in anything higher-stakes."
+
+**The gotcha**
+Grounding failing doesn't look like an error — it looks like a plausible, confidently-worded wrong answer, because the model is fully capable of answering from pretraining and nothing stops it except an instruction it might not always follow. A second, quieter gotcha specific to this implementation: `search()` has no relevance threshold, so it always returns its top-k chunks even if none of them are actually relevant to the query — the LLM was handed an irrelevant "context" chunk when asked about France, and had to rely on the grounding instruction alone to recognize it wasn't useful. A weaker instruction, or a less compliant model, could have answered from the irrelevant chunk anyway, or from pretraining, and nothing in the current pipeline would have caught it.
+
+**Self-test**
+- What specifically makes grounding an instruction rather than a guarantee — what would have to change for it to become a hard constraint?
+- Why does citing "[1]" next to a claim not actually prove the claim is true or that chunk 1 supports it?
+- If `search()` returns an irrelevant top-1 chunk (because there's no similarity threshold), what are the two different ways the system could fail, and which one did the grounding instruction actually prevent in this project's testing?
+- Why is system/user role separation in the prompt (rather than one concatenated string) not just a style preference?
+- How would you design a test to catch a grounding failure automatically, rather than noticing it by manually reading an answer?
