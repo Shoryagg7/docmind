@@ -197,7 +197,7 @@ If work starts drifting out of scope, stop and say so.
 - Redis Stack
 - LangGraph
 - Groq
-- `llama-3.3-70b-versatile`
+- `openai/gpt-oss-20b` (superseded `llama-3.3-70b-versatile`, which Groq deprecated/removed — see BUILD_LOG Unit 2)
 - sentence-transformers
 - `all-MiniLM-L6-v2`
 - Docker Compose
