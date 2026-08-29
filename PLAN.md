@@ -144,6 +144,21 @@ Built as one consolidated unit rather than several separate approvals, at the de
 - **Failure mode discovered:** port 8000 was already bound by an unrelated, already-running DeliverIQ Docker container on this machine — our first `uvicorn` attempt failed to bind (`[Errno 98] address already in use`) and exited silently in the background, while a `curl` against port 8000 kept "succeeding" because it was actually hitting DeliverIQ's health check the entire time, not ours. Caught by checking the actual server log rather than trusting a 200 response; fixed by moving to port 8001.
 - **Resume claim earned:** **"Built a naive RAG system end-to-end over FastAPI: PDF upload, chunking, embedding, pgvector retrieval, and LLM-generated answers with source citations, with verified grounding behavior (refuses out-of-context questions instead of hallucinating)."** Earned now — this was tested as a real running HTTP service, not just unit-tested functions.
 
+### Unit 11 — Citation filtering, document scoping, source B-tree index
+
+Found via real usage (developer uploaded their own resume) rather than planned work — two real bugs surfaced live and got fixed:
+
+- **What:**
+  - `services/rag.py` — `sources` in the response now only includes chunks the LLM actually cited (parsed `[n]` refs from the answer), not every retrieved chunk regardless of use. Falls back to all retrieved chunks only if citation parsing finds nothing (best-effort, not guaranteed format).
+  - `SYSTEM_PROMPT` tightened to require plain ASCII `[n]` brackets — the model was observed using full-width bracket characters (`〔2〕`) on one run, which silently broke citation parsing.
+  - `services/vector_store.py` / `services/rag.py` / `schemas/query.py` / `routers/query.py` — threaded an optional `source` param through `search()` → `answer_question()` → `QueryRequest` → the route, so a query can be scoped to one uploaded document instead of searching the whole `chunks` table.
+  - `alembic/versions/3002213eec16_...` — B-tree index on `chunks.source`, since it's now a filter column.
+- **Why:** the developer uploaded their real resume and got an answer contaminated by leftover chunks from a previous test document — `search()` had no document scoping at all, competing every uploaded document's chunks for the same top-k slots regardless of which document the user meant to ask about.
+- **Command used:** `.venv/bin/alembic upgrade head`; `.venv/bin/python -m pytest -v` (17/17); real HTTP tests with two distinct uploaded documents, scoped vs. unscoped.
+- **Observed result:** scoped query to `sample.pdf` → correct answer from that document only; scoped to `second_doc.pdf` → correct answer from that one only; **unscoped query with both documents present → `"I don't know"`**, because the question was genuinely ambiguous across two different people's bios — grounding correctly recognized the ambiguity instead of guessing.
+- **Failure mode discovered (unrelated to this unit's own change, found while verifying it):** `tests/test_vector_store.py` does `DELETE FROM chunks` and reseeds its own fixture data every run — and dev and test share the same database (no separate test DB). Running `pytest` silently destroyed manually-uploaded dev/demo data mid-session. Known, real class of bug (shared test/dev state); not fixed here — would need a separate test database or transactional test fixtures, a bigger change than this moment called for. Documented so it's not mistaken for a scoping bug again.
+- **Resume claim earned:** extends Unit 10's claim — retrieval can now be scoped per document, and citations reflect only what the model actually used, not a raw dump of everything retrieved.
+
 ## Remaining work (current phase)
 
-**Phase 4 complete.** Code track (naive RAG end-to-end) observed via real HTTP calls; concept track (prompting, grounding, citations) written in `Interview_prep.md` §5. Next: Phase 5 — LangGraph rewrite (chains vs. graphs, state, reducers), wrapping the retrieve→generate loop just built into an explicit graph — still pending its own proposal/approval.
+**Phase 4 complete**, including two real bugs found and fixed via actual usage rather than planned testing. Next: Phase 5 — LangGraph rewrite (chains vs. graphs, state, reducers), wrapping the retrieve→generate loop into an explicit graph — pending its own proposal/approval. Known open item for later: test/dev database separation (surfaced in Unit 11, not yet fixed).

@@ -131,3 +131,15 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Resume claim earned:** **"Built a naive RAG system end-to-end over FastAPI: PDF upload, chunking, embedding, pgvector retrieval, and LLM-generated answers with source citations, with verified grounding behavior."** First time the whole system has been exercised as a real running service rather than only through unit tests and Python REPL calls.
 
 **Phase 4 code complete.** Concept notes (prompting, grounding, citations) next.
+
+---
+
+## Unit 11 — Citation filtering, document scoping, source B-tree index
+
+- **Concept touched:** grounding/citation reliability (continued from Unit 10) plus a new, real one: retrieval without document scoping means multiple uploaded documents silently compete for the same top-k slots.
+- **Files changed:** `services/rag.py` (citation filtering + tightened `SYSTEM_PROMPT`), `services/vector_store.py` + `schemas/query.py` + `routers/query.py` (optional `source` scoping param threaded through), `alembic/versions/3002213eec16_add_btree_index_on_chunks_source.py` (new).
+- **Design decision:** citation filtering falls back to *all* retrieved sources if regex parsing finds zero `[n]` matches, rather than returning empty evidence — chosen because citation format is LLM-generated and best-effort, not guaranteed (proven live: the model used full-width brackets `〔2〕` on one run, silently breaking a stricter parser). B-tree added on `source` since equality filtering is exactly what B-trees are for — the standard, default Postgres index type for `WHERE column = value`, unrelated to HNSW/vector indexing.
+- **Test/command run:** `.venv/bin/python -m pytest -v` (17/17); manual HTTP tests with two distinct real documents uploaded, queried scoped and unscoped.
+- **Observed behavior:** scoped queries correctly isolated each document's answer; the unscoped query against both documents together returned `"I don't know"` for an ambiguous cross-document question — grounding correctly refused to guess between two different people's names rather than silently picking one.
+- **Failure modes discovered:** (1) the exact bug that motivated this unit — a leftover chunk from earlier testing contaminated a real query, discovered by the developer through actual use, not a planned test. (2) A second, unrelated one found while verifying the fix: `test_vector_store.py` wipes and reseeds the `chunks` table on every `pytest` run, and shares the same database as manual dev testing — running the test suite silently destroyed uploaded demo documents mid-session. Documented as a known open issue (needs a separate test DB), not fixed in this unit.
+- **Resume claim earned:** extends Unit 10 — retrieval is now document-scoped and citations reflect only what was actually used in the answer, both found and fixed through real usage rather than synthetic testing.

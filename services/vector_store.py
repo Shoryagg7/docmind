@@ -12,12 +12,12 @@ async def store_chunks(session: AsyncSession, texts: list[str], source: str) -> 
     await session.commit()
 
 
-async def search(session: AsyncSession, query: str, k: int = 3) -> list[Chunk]:
+async def search(
+    session: AsyncSession, query: str, k: int = 3, source: str | None = None
+) -> list[Chunk]:
     query_embedding = embed_text(query)
-    stmt = (
-        select(Chunk)
-        .order_by(Chunk.embedding.cosine_distance(query_embedding))
-        .limit(k)
-    )
+    stmt = select(Chunk).order_by(Chunk.embedding.cosine_distance(query_embedding)).limit(k)
+    if source is not None:
+        stmt = stmt.where(Chunk.source == source)
     result = await session.execute(stmt)
     return list(result.scalars().all())

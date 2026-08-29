@@ -11,8 +11,8 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample.pdf"
 def test_extract_text_returns_pdf_content():
     text = extract_text(FIXTURE)
 
-    assert "Aria Kapoor" in text
-    assert "software engineer" in text
+    assert "Maya Chen" in text
+    assert "backend engineer" in text
 
 
 def test_extract_text_raises_on_missing_file():
