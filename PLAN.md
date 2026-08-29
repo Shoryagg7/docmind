@@ -8,7 +8,7 @@ Agentic RAG document assistant. Built one small, observable unit at a time per `
 |---|---|---|---|
 | 1 | Embeddings, cosine similarity | Skeleton, config, Groq client | Done |
 | 2 | Chunking strategy and trade-offs | PDF ingest, chunker | Done |
-| 3 | Vector indexes, HNSW vs exact | pgvector schema, top-k search | Not started |
+| 3 | Vector indexes, HNSW vs exact | pgvector schema, top-k search | Done |
 | 4 | Prompting, grounding, citations | Naive RAG end-to-end | Not started |
 | 5 | Chains vs graphs, state, reducers | LangGraph rewrite | Not started |
 | 6 | Self-correction, bounded loops | Relevance grader + query rewrite | Not started |
@@ -86,4 +86,39 @@ Units are logged here as they're completed. See `BUILD_LOG.md` for the detailed 
 - **Observed result:** 14/14 tests passed. Manual check showed real cosine scores: cat-sentence pair 0.612, unrelated pair 0.075, and — notably — a negated drug-approval pair scored 0.888, *higher* than the genuinely similar pair. Confirms the negation failure mode predicted in `Interview_prep.md` §1 with real numbers.
 - **Remaining work:** none for this unit. Negation failure is expected and tracked for Phase 9, not something to fix now.
 
-Next: pgvector schema + Docker Compose Postgres, plus exact (brute-force) top-k similarity search via SQL — pending approval.
+### Unit 7 — Postgres + pgvector schema (Docker Compose, Alembic)
+
+- **What:** `docker-compose.yml` running `pgvector/pgvector:pg18`; `core/db.py` (async SQLAlchemy engine/session, `Base`); `core/models.py` (`Chunk` ORM model: `id`, `content: Text`, `source: Text`, `embedding: Vector(384)`); Alembic (async template) with a hand-written migration that runs `CREATE EXTENSION IF NOT EXISTS vector` then creates the `chunks` table. No data inserted, no search yet.
+- **Why:** storage half of Phase 3's code track; must exist before any top-k search query.
+- **Files changed:** `docker-compose.yml`, `core/db.py`, `core/models.py`, `core/config.py` (added `database_url`), `.env.example` / `.env` (added `DATABASE_URL`), `alembic.ini`, `alembic/env.py`, `alembic/versions/398fbec4f808_create_chunks_table.py`, `requirements.txt` (added `sqlalchemy`, `alembic`, `asyncpg`, `pgvector`).
+- **Command used:** `docker compose up -d postgres`, `.venv/bin/alembic upgrade head`, `docker compose exec postgres psql -U docmind -d docmind -c "\d chunks"` and `-c "\dx"`.
+- **Observed result:** `\d chunks` confirmed all 4 columns with correct types, `embedding` as `vector(384)`; `\dx` confirmed the `vector` extension (v0.8.6) is enabled. Full pytest suite still 14/14 after the config change.
+- **Design decision:** `pgvector/pgvector:pg18` image (extension precompiled) over manual `CREATE EXTENSION` on a plain Postgres image. Async SQLAlchemy + `asyncpg` + Alembic's async template, matching the async-Python-first stack. No index on `embedding` yet — deliberately deferred; exact (brute-force) search comes first per `CLAUDE.md`'s explicit ordering rule.
+- **Failure mode discovered:** Postgres 18's Docker image changed its expected volume mount — `docker-compose.yml` originally mounted the volume at `/var/lib/postgresql/data`, which made the container exit immediately (exit code 1) with a message that 18+ images want a single mount at `/var/lib/postgresql` instead (they manage the versioned subdirectory themselves). Fixed by changing the mount path; a real, undocumented-until-you-hit-it infra gotcha, not a code bug.
+- **Remaining work:** inserting real embedded chunks and running an actual top-k cosine similarity query — separate next unit.
+
+### Unit 8 — Exact top-k cosine similarity search
+
+- **What:** `services/vector_store.py` with `store_chunks(session, texts, source)` and `search(session, query, k) -> list[Chunk]`, using pgvector's `Chunk.embedding.cosine_distance(query_embedding)` (compiles to SQL `<=>`) with `ORDER BY ... ASC LIMIT k`. No index on `embedding` — full-table exact scan.
+- **Why:** the actual "top-k search" deliverable of Phase 3's code track, and the first point retrieval genuinely works end-to-end (embed → store → query → correct ranked results).
+- **Files changed:** `services/vector_store.py`, `tests/test_vector_store.py`, `core/db.py` (switched engine to `poolclass=NullPool`).
+- **Command used:** `.venv/bin/python -m pytest -v`
+- **Observed result:** 16/16 tests passed. Manual query against 3 seeded chunks for "What is the refund policy?" returned the refund chunk first at cosine distance 0.3277, vs. 0.8200 and 0.9880 for the other two — correct ranking with real numbers.
+- **Design decision:** used pgvector's SQLAlchemy `.cosine_distance()` comparator (compiles to `<=>`) rather than raw SQL, for type safety and IDE support; functionally identical to hand-written SQL. `store_chunks`/`search` take an `AsyncSession` as a parameter rather than managing their own — keeps the functions testable and avoids hidden global session state.
+- **Failure mode discovered:** async engine/connection-pool mismatch across event loops — `core/db.py`'s engine used default pooling, but pytest calling `asyncio.run()` per test spins a fresh event loop each time, and a pooled `asyncpg` connection from a previous loop raised `InterfaceError: cannot perform operation: another operation is in progress` on reuse. Fixed by switching to `poolclass=NullPool` (the same fix Alembic's own async template already used in `env.py`) — every checkout is a fresh connection, no cross-loop reuse. Documented as a deliberate trade-off (no pooling) to revisit once a FastAPI app holds one persistent event loop for the app's lifetime.
+- **Break-it experiment:** re-ran the same query with `ORDER BY ... DESC` instead of `ASC` — no error, just a silently and completely inverted ranking (most irrelevant chunk returned first). Confirms the predicted gotcha from the unit proposal.
+- **Resume claim earned:** **"Built semantic search over documents using sentence-transformer embeddings and PostgreSQL/pgvector, with exact cosine-similarity top-k retrieval."** Earned now — embed, store, and query have all been observed working together on real data, not just individually.
+
+### Unit 9 — HNSW index + exact-vs-approximate comparison
+
+- **What:** Alembic migration adding `CREATE INDEX chunks_embedding_hnsw_idx ON chunks USING hnsw (embedding vector_cosine_ops)`. Compared query plans via `EXPLAIN ANALYZE` at 3 rows vs. 3003 rows (3000 synthetic random unit vectors inserted temporarily, then deleted).
+- **Why:** closes out Phase 3's concept track, "Vector indexes, HNSW vs exact" — the exact half was already observed in Unit 8; this makes the HNSW half concrete with a real query plan instead of only discussed in theory.
+- **Files changed:** `alembic/versions/4b925de70d4b_add_hnsw_index_on_chunks_embedding.py`.
+- **Command used:** `.venv/bin/alembic upgrade head`; manual `EXPLAIN ANALYZE` runs via a Python script at both row counts; cleanup via `DELETE FROM chunks WHERE source = 'synthetic-bulk-demo'`.
+- **Observed result:** at 3 rows, the planner ignored the HNSW index entirely and used `Seq Scan` (correct cost-based choice — index overhead isn't worth it at this size). At 3003 rows, the plan switched to `Index Scan using chunks_embedding_hnsw_idx`. Confirmed the approximate index still returned the correct, genuinely relevant chunk first even among 3000 unrelated random vectors.
+- **Design decision:** synthetic bulk data generated with pure-Python `random.gauss` + manual L2 normalization (no numpy dependency added) purely to give the query planner enough rows to consider the index; deleted immediately after the comparison rather than left in the table.
+- **Remaining work:** none — synthetic rows cleaned up, table back to 3 real rows, full suite re-confirmed at 16/16.
+
+## Remaining work (current phase)
+
+**Phase 3 complete.** Code track (pgvector schema, top-k search) and concept track (vector indexes, HNSW vs exact) both built and observed with real evidence, not just discussed. Concept notes for Phase 3 (embeddings-in-practice negation gotcha already covered in §1; cosine similarity in §2) plus the new exact-vs-HNSW material go into `Interview_prep.md` §4 next.

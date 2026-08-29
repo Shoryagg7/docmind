@@ -82,3 +82,30 @@ Chunk size and overlap are a trade-off, not a free parameter to maximize: too sm
 - Why is character-based chunk size not the same thing as token-based chunk size, and why does that matter once you plug in an actual embedding model?
 - If a document is mostly short, single-sentence bullet points, would you want a larger or smaller chunk size than for a document of dense legal prose? Why?
 - What's a concrete failure case where fixed-size chunking without overlap would return a chunk that's individually useless, even though the source document clearly contains the answer?
+
+---
+
+## 4. Vector Indexes: Exact Search vs. HNSW (Approximate Nearest Neighbor)
+
+**What it is**
+Top-k retrieval means: given a query embedding, find the k stored chunk embeddings closest to it. The direct way to do this — exact search — computes the distance between the query and *every single row*, sorts, and returns the top k. It's correct by construction (there's no approximation anywhere), but it's O(n) per query: double the rows, double the work. HNSW (Hierarchical Navigable Small World) is an *index* that trades a small amount of correctness for speed at scale: it pre-builds a graph structure over the stored vectors at insert time, so a query can navigate straight toward the neighborhood of likely-closest vectors instead of touching every row — sub-linear query time, but it can occasionally miss the true nearest neighbor in exchange for that speed, which is why it's called *approximate* nearest neighbor (ANN) search.
+
+**Why we chose it**
+Requirement: retrieve the top-k most relevant chunks for a query, correctly, and understand when an index actually helps versus when it's dead weight.
+Choice: build and observe both — exact search first (Unit 8), then add an HNSW index and directly compare query plans (Unit 9), rather than picking one and only reading about the other.
+Benefit: this isn't theoretical — `EXPLAIN ANALYZE` showed Postgres's query planner make its own cost-based decision: at 3 rows it used `Seq Scan` and ignored the HNSW index entirely (correct — index overhead isn't worth it at that size); at 3003 rows (3000 synthetic vectors added temporarily) it switched to `Index Scan using chunks_embedding_hnsw_idx` on its own, no query change required. Watching the planner flip its own decision at scale is a much stronger interview answer than reciting "HNSW is faster."
+Cost: HNSW is approximate — at extreme scale or with poorly tuned parameters it can miss true nearest neighbors, and it costs more to build/update than a plain B-tree; also needs the right operator class (`vector_cosine_ops`) matching the distance function actually used in queries, or the index silently can't be used at all.
+Rejected alternative (for now): IVFFlat, pgvector's other index type. Rejected because it requires the table to already have representative data before building (it clusters existing vectors into centroids at build time), which is an awkward fit for an ingestion pipeline where documents arrive incrementally — HNSW supports incremental inserts naturally. Worth knowing IVFFlat exists and why it wasn't the pick, not worth building both.
+
+**Soundbite**
+"Exact search checks every row, so it's always correct but scales linearly — fine for hundreds of chunks, not for millions. HNSW builds a navigable graph over the vectors so a query can jump straight to the right neighborhood instead of scanning everything, trading a small amount of recall for speed. I didn't just take that on faith — I built the index, ran `EXPLAIN ANALYZE` at 3 rows and at 3000+ rows, and watched Postgres's own planner ignore the index at small scale and switch to using it once there was enough data to make it worth the overhead."
+
+**The gotcha**
+The single most dangerous failure mode I hit in this whole phase wasn't the index — it was `ORDER BY embedding <=> :query DESC` instead of `ASC`. pgvector's `<=>` operator returns *distance* (lower = more similar), so ordering descending doesn't error, doesn't warn, doesn't crash — it just silently returns the *least* relevant results first, and everything downstream (citations, generated answers) would confidently be wrong with no signal that anything broke. A second, subtler gotcha: an HNSW index built with the wrong operator class (say, `vector_l2_ops` when your queries use cosine distance) won't be used by the query planner at all — no error, the query just quietly falls back to a sequential scan, and you'd only notice by checking the query plan.
+
+**Self-test**
+- Why is exact nearest-neighbor search O(n) per query, and what specifically about HNSW's structure avoids touching every row?
+- Why did Postgres's query planner choose *not* to use the HNSW index at 3 rows, even though the index existed?
+- What does pgvector's `<=>` operator actually return, and what happens — silently — if you sort by it in the wrong direction?
+- Why does an HNSW index need its operator class (e.g. `vector_cosine_ops`) to match the distance function used in the query, and what happens if they don't match?
+- At what point (roughly, and why) would you expect exact search to become a real bottleneck for DocMind, given the corpus sizes a portfolio project actually deals with?
