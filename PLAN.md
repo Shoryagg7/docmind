@@ -159,6 +159,16 @@ Found via real usage (developer uploaded their own resume) rather than planned w
 - **Failure mode discovered (unrelated to this unit's own change, found while verifying it):** `tests/test_vector_store.py` does `DELETE FROM chunks` and reseeds its own fixture data every run — and dev and test share the same database (no separate test DB). Running `pytest` silently destroyed manually-uploaded dev/demo data mid-session. Known, real class of bug (shared test/dev state); not fixed here — would need a separate test database or transactional test fixtures, a bigger change than this moment called for. Documented so it's not mistaken for a scoping bug again.
 - **Resume claim earned:** extends Unit 10's claim — retrieval can now be scoped per document, and citations reflect only what the model actually used, not a raw dump of everything retrieved.
 
+### Unit 12 — Auto-append `.pdf` to `source` in query requests
+
+- **What:** `schemas/query.py` — `QueryRequest.source` gained a `field_validator` that appends `.pdf` if the given value doesn't already end with it (case-insensitive check). `"sample"` and `"sample.pdf"` now both resolve to `"sample.pdf"`.
+- **Why:** developer hit the exact-match B-tree gotcha from Unit 11 firsthand (`source: "sample"` silently matched nothing) and asked for the friction removed.
+- **Files changed:** `schemas/query.py`, `tests/test_query_schema.py` (new).
+- **Command used:** `.venv/bin/python -m pytest tests/test_query_schema.py -v` (3/3) — deliberately not the full suite, to avoid the Unit 11 test/dev DB collision wiping demo data again; verified live via `curl` with `source: "sample"`.
+- **Observed result:** query with `source: "sample"` correctly resolved to `sample.pdf` and returned the right answer.
+- **Design decision:** normalization happens at the schema layer (Pydantic validator), before the request reaches any service code — keeps `search()`/`answer_question()` unaware of the convenience and only ever dealing with a fully-qualified source string. Still an exact match after normalization — a genuine typo (`"smple"`) is unaffected and still silently returns nothing; only the extension is forgiving.
+- **Resume claim earned:** none new — this is a UX polish fix, not new capability.
+
 ## Remaining work (current phase)
 
-**Phase 4 complete**, including two real bugs found and fixed via actual usage rather than planned testing. Next: Phase 5 — LangGraph rewrite (chains vs. graphs, state, reducers), wrapping the retrieve→generate loop into an explicit graph — pending its own proposal/approval. Known open item for later: test/dev database separation (surfaced in Unit 11, not yet fixed).
+**Phase 4 complete**, including three real fixes found and made via actual usage rather than planned testing. Next: Phase 5 — LangGraph rewrite (chains vs. graphs, state, reducers), wrapping the retrieve→generate loop into an explicit graph — pending its own proposal/approval. Known open item for later: test/dev database separation (surfaced in Unit 11, not yet fixed).

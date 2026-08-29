@@ -143,3 +143,15 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Observed behavior:** scoped queries correctly isolated each document's answer; the unscoped query against both documents together returned `"I don't know"` for an ambiguous cross-document question — grounding correctly refused to guess between two different people's names rather than silently picking one.
 - **Failure modes discovered:** (1) the exact bug that motivated this unit — a leftover chunk from earlier testing contaminated a real query, discovered by the developer through actual use, not a planned test. (2) A second, unrelated one found while verifying the fix: `test_vector_store.py` wipes and reseeds the `chunks` table on every `pytest` run, and shares the same database as manual dev testing — running the test suite silently destroyed uploaded demo documents mid-session. Documented as a known open issue (needs a separate test DB), not fixed in this unit.
 - **Resume claim earned:** extends Unit 10 — retrieval is now document-scoped and citations reflect only what was actually used in the answer, both found and fixed through real usage rather than synthetic testing.
+
+---
+
+## Unit 12 — Auto-append `.pdf` to `source` in query requests
+
+- **Concept touched:** none new — API ergonomics fix on top of Unit 11's exact-match filtering.
+- **Files changed:** `schemas/query.py` (added a `field_validator` on `source`), `tests/test_query_schema.py` (new).
+- **Design decision:** normalization at the Pydantic schema layer, so every downstream function (`answer_question`, `search`) still only ever sees a fully-qualified source string — the convenience is a request-parsing concern, not a retrieval concern.
+- **Test/command run:** `.venv/bin/python -m pytest tests/test_query_schema.py -v` (3/3, scoped deliberately to avoid the known DB-wiping collision from Unit 11); confirmed live with `curl` using `source: "sample"`.
+- **Observed behavior:** `source: "sample"` now correctly resolves to `sample.pdf` and returns Maya Chen's answer, matching what previously required the full filename.
+- **Failure mode discovered:** none new — this fixes UX friction from an already-known, already-documented gotcha (Unit 11), doesn't change its underlying exact-match nature (a genuine typo still silently matches nothing).
+- **Resume claim earned:** none new — polish, not new capability.
