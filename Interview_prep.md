@@ -136,3 +136,31 @@ Grounding failing doesn't look like an error — it looks like a plausible, conf
 - If `search()` returns an irrelevant top-1 chunk (because there's no similarity threshold), what are the two different ways the system could fail, and which one did the grounding instruction actually prevent in this project's testing?
 - Why is system/user role separation in the prompt (rather than one concatenated string) not just a style preference?
 - How would you design a test to catch a grounding failure automatically, rather than noticing it by manually reading an answer?
+
+---
+
+## 6. Top-k Retrieval: Choosing k, and Filtered Vector Search
+
+**What it is**
+`k` is how many chunks a single retrieval call asks for — and it's a real trade-off dial, not a "bigger is safer" setting. It was proven directly, not just argued: with `k=3`, a query asking to list all projects on a resume returned only one, because the second project's chunk simply didn't rank in the top 3 — a **recall failure** (the right information existed in the corpus but never reached the LLM). Raising `k` to 6 fixed that, but the response then returned all 6 retrieved chunks as "sources" — most of them irrelevant (skills, extracurriculars) — a **precision problem** (too much noise reaching the LLM and the client). Those are two different failure modes, fixed two different ways: recall by raising `k`, precision by filtering the returned `sources` down to only the chunks the LLM actually cited in its answer. Raising `k` doesn't fix precision, and filtering citations doesn't fix recall — each needed its own fix.
+
+Separately, `search()` gained an optional equality filter: `WHERE source = :source`, combined in the same query with the existing `ORDER BY embedding <=> :query` ranking. This is document/metadata scoping — restricting the vector search to rows matching an exact structured condition before or alongside ranking by similarity. It's a very common real RAG pattern (often called "filtered vector search"), and it's exactly what stops one uploaded document's chunks from silently competing with another's for the same top-k slots.
+
+**Why we chose it**
+Requirement: answer "list all X" questions completely; keep citations honest (only show what was actually used); let a query be restricted to one uploaded document instead of the whole corpus.
+Choice: keep `k` as a per-query parameter (not hardcoded), default modest but overridable; filter `sources` post-generation to only cited chunk IDs; add an optional `source` equality filter alongside the existing similarity ordering.
+Benefit: each of the three real failures this project actually hit — missed enumeration, noisy citations, cross-document contamination — got fixed by its own small, targeted change, each provably working (verified with real multi-document uploads, not just unit tests).
+Cost: `k` is still a blunt instrument — raising it is not a real fix for enumeration at real scale (a corpus with hundreds of chunks and dozens of "project"-like items would need a fundamentally different retrieval strategy, not `k=50`). Document scoping requires the caller to already know the exact `source` string — no fuzzy matching, no automatic per-session isolation; get the string wrong and you silently search nothing (or everything, if omitted) rather than getting an error.
+
+**Soundbite**
+"`k` isn't a safety knob you just turn up — I hit both failure modes myself. `k=3` missed a second project because its chunk didn't rank in the top 3: a recall problem. Raising it to `k=6` fixed that but returned four irrelevant chunks as sources until I filtered citations down to only what the model actually referenced: a precision problem, fixed separately. Then I added document scoping — a plain equality filter on `source`, combined with the existing vector similarity ordering in the same query — because without it, two uploaded documents' chunks competed for the same slots, and I watched that produce a genuinely correct 'I don't know' when I asked an ambiguous question with both documents live."
+
+**The gotcha**
+Two indexes are doing two completely different jobs here, and conflating them is an easy interview slip. The B-tree index (`chunks_source_idx`) is built on the `source` column and answers "which rows exactly equal this value" — the ordinary, default index type for equality/range filtering, same job it does for a primary key. The HNSW index (`chunks_embedding_hnsw_idx`) is built on the `embedding` column and answers a completely different question — "which rows are approximately closest to this vector" — needing a graph structure, not a sorted tree. A single query can use both together (B-tree filters down to one document's rows, HNSW ranks the filtered set by similarity), but neither index can do the other's job, and mixing up "which key backs which index" is exactly the kind of detail an interviewer will probe.
+
+**Self-test**
+- Why does raising `k` fix a missed-item recall problem but not fix it "for real" at a much larger corpus size?
+- What's the practical difference between a recall problem and a precision problem in retrieval — and which one did each of DocMind's two real failures actually correspond to?
+- What column is the B-tree index built on, and what column is the HNSW index built on? Why can't either substitute for the other?
+- Why doesn't filtering the `sources` field change how many chunks were retrieved or how many tokens the LLM call cost?
+- If a corpus had 10 documents with 50 chunks each, what would have to change about the current retrieval design to reliably answer "list every project across all my documents" — is raising `k` a real answer here, and why or why not?
