@@ -55,3 +55,30 @@ Cosine similarity assumes a well-normalized embedding space — mix embeddings f
 - If two chunks score a cosine similarity of 0.95, what does that actually tell you about their meaning — and what does it *not* tell you?
 - Why might Euclidean distance and cosine similarity disagree about which of two chunks is "more similar" to a query?
 - How would you pick a similarity threshold for "this chunk isn't relevant enough to use"? What can go wrong with a fixed threshold?
+
+---
+
+## 3. Chunking and Overlap
+
+**What it is**
+Chunking is splitting a document into smaller pieces before embedding and storing them, because you can't (and shouldn't) embed or retrieve an entire document as one unit — an embedding model compresses text into a single fixed-size vector, and the more text you cram in, the more that vector becomes an average of many unrelated ideas, diluting the very signal retrieval depends on. DocMind's chunker (`services/chunker.py`) uses a fixed-size sliding window: take `chunk_size` characters, then slide forward by `chunk_size - overlap` (not the full `chunk_size`), so consecutive chunks share a trailing/leading region of text. That shared region — the overlap — exists purely to stop a sentence or clause that happens to fall across a chunk boundary from being truncated in both of the chunks it lands in.
+
+**Why we chose it**
+Requirement: split extracted PDF text into pieces small enough to embed meaningfully, without losing information that straddles a split point.
+Choice: character-based fixed-size chunking with a configurable overlap (defaults: 500 chars, 50 overlap).
+Benefit: dead simple to implement and reason about, no extra dependency, and its failure modes (a phrase split across a boundary) are easy to demonstrate and understand before reaching for something fancier.
+Cost: character count isn't the same as token count (the unit the embedding model and LLM actually operate on), and it ignores document structure entirely — it will just as happily cut a chunk boundary in the middle of a sentence, a table row, or a heading as anywhere else.
+Rejected alternative: sentence- or paragraph-aware chunking (e.g., via `nltk`/`spaCy` sentence tokenization, or LangChain's `RecursiveCharacterTextSplitter`). Rejected for now because it hides the underlying mechanism behind an abstraction before the naive version's behavior — and its failure modes — have actually been observed; it's a legitimate upgrade to revisit once the naive baseline's limitations are felt, not before.
+
+**Soundbite**
+"An embedding model needs bite-sized input, so I split each document into overlapping chunks before embedding them — fixed size, with a sliding window so consecutive chunks share some text. The overlap exists so a sentence that happens to fall on a chunk boundary doesn't get truncated in both halves and lose its meaning in each. I kept it character-based and structure-blind on purpose for the first pass — it's the simplest version, and its failure modes are exactly what motivate smarter chunking strategies later."
+
+**The gotcha**
+Chunk size and overlap are a trade-off, not a free parameter to maximize: too small and each chunk lacks enough surrounding context to be individually meaningful, hurting both its embedding quality and how useful it is once retrieved; too large and the chunk's embedding gets diluted by unrelated content in the same chunk, hurting retrieval precision, while also wasting LLM context window at generation time. There's no universally correct size — it depends on document type and the kind of questions being asked. A second gotcha: overlap increases storage and embedding cost roughly linearly (each token of overlap gets embedded twice, once per chunk it appears in), so it's not free to just crank overlap up to be safe.
+
+**Self-test**
+- Why can't you just embed an entire document as a single vector instead of chunking it?
+- What does the `overlap` parameter actually buy you, mechanically, in a sliding-window chunker?
+- Why is character-based chunk size not the same thing as token-based chunk size, and why does that matter once you plug in an actual embedding model?
+- If a document is mostly short, single-sentence bullet points, would you want a larger or smaller chunk size than for a document of dense legal prose? Why?
+- What's a concrete failure case where fixed-size chunking without overlap would return a chunk that's individually useless, even though the source document clearly contains the answer?

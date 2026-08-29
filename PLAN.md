@@ -53,6 +53,16 @@ Units are logged here as they're completed. See `BUILD_LOG.md` for the detailed 
 - **Design decision:** chose `pypdf` over `PyMuPDF` (AGPL license, awkward for a public portfolio repo) and `pdfplumber` (heavier, table-focused, unneeded here).
 - **Remaining work:** upload endpoint (HTTP plumbing) and chunker (Phase 2's actual concept) are separate future units.
 
+### Unit 4 — Fixed-size chunker with overlap
+
+- **What:** `services/chunker.py` with `chunk_text(text, chunk_size=500, overlap=50)` — character-based sliding window, raises `ValueError` if `overlap >= chunk_size`.
+- **Why:** this phase's actual concept (chunking + overlap trade-offs); the direct next step after extraction, and everything downstream (embeddings, pgvector storage) needs chunks to operate on.
+- **Files changed:** `services/chunker.py`, `tests/test_chunker.py`.
+- **Command used:** `.venv/bin/python -m pytest -v`
+- **Observed result:** 10/10 tests passed (5 existing + 5 new: overlap slicing correctness, shared overlap region between consecutive chunks, empty text, short text, invalid overlap).
+- **Design decision:** character-based, not token-based, chunking — the simplest mechanism to observe directly; introducing the embedding model's tokenizer here would pull in a Phase 3 abstraction before chunking itself is understood.
+- **Remaining work:** none for this unit. Interview_prep.md §3 written alongside (developer requested side-by-side, not at phase end, for this one).
+
 ## Remaining work (current phase)
 
-Phase 2 Unit 1 (PDF extraction) done. Next: chunker — the phase's actual concept (chunking strategy, overlap trade-offs) — pending approval.
+Phase 2 code (extraction + chunker) done. Not yet built: an upload endpoint tying the two together, and pgvector storage (Phase 3) to actually persist chunks. Phase 2 isn't "complete" in the CLAUDE.md sense until that behavior is observed end-to-end, even though both underlying units work.

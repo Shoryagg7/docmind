@@ -41,3 +41,15 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Observed behavior:** 5/5 tests passed; extraction returns the exact fixture text, missing file raises `FileNotFoundError`.
 - **Failure mode discovered:** feeding a non-PDF file (plain text saved as `.pdf`) raises `pypdf.errors.PdfStreamError: Stream has ended unexpectedly` — a third distinct failure signature alongside Unit 1's `ValidationError` and Unit 2's `NotFoundError`/`AuthenticationError`. Relevant later: the upload endpoint will need to catch this and turn it into a clean validation error, not a bare 500 (per the project's "no bare generic exceptions for expected application failures" convention).
 - **Resume claim earned:** none yet — extracting text from a fixture isn't "built a document ingestion pipeline." That's earned once upload + extraction + chunking + storage work together.
+
+---
+
+## Unit 4 — Fixed-size chunker with overlap
+
+- **Concept touched:** chunking and overlap.
+- **Files changed:** `services/chunker.py` (new), `tests/test_chunker.py` (new).
+- **Design decision:** character-based sliding window (`chunk_size=500`, `overlap=50` defaults), not token- or sentence-aware. Rejected `nltk`/`spaCy` sentence-boundary chunking for this unit — it hides the naive fixed-size mechanism (and its failure modes) behind a "smarter" abstraction before those failure modes have actually been seen. `overlap >= chunk_size` raises `ValueError` rather than silently producing an infinite loop or empty chunks.
+- **Test/command run:** `.venv/bin/python -m pytest -v`
+- **Observed behavior:** 10/10 tests passed; a manual demo showed a planted phrase ("thirty days written notice") straddling a chunk boundary was split and unrecoverable in any single chunk with `overlap=1`, but intact in one chunk with `overlap=30` — same underlying text, only the overlap parameter changed.
+- **Failure mode discovered:** none new beyond the already-guarded `overlap >= chunk_size` case; the more interesting "failure" was the intentional boundary-split demo above, which motivates overlap existing at all.
+- **Resume claim earned:** none yet — chunking in isolation isn't a resume claim; it becomes one once chunks flow into embeddings + storage + retrieval.
