@@ -75,4 +75,15 @@ Units are logged here as they're completed. See `BUILD_LOG.md` for the detailed 
 
 ## Remaining work (current phase)
 
-**Phase 2 complete.** Code track (PDF ingest, chunker) fully built and observed end-to-end via `ingest_pdf`; concept track (chunking strategy and trade-offs) written in `Interview_prep.md` §3. Next: Phase 3 — pgvector schema + top-k search, starting with generating embeddings for chunks via `sentence-transformers`.
+**Phase 2 complete.** Code track (PDF ingest, chunker) fully built and observed end-to-end via `ingest_pdf`; concept track (chunking strategy and trade-offs) written in `Interview_prep.md` §3.
+
+### Unit 6 — Embedder (sentence-transformers, no database yet)
+
+- **What:** `services/embedder.py` with `embed_text(text) -> list[float]`, wrapping `sentence-transformers`' `all-MiniLM-L6-v2`, embeddings L2-normalized at encode time. Validated with a hand-written cosine similarity function (no numpy, no database) against real sentence pairs.
+- **Why:** Phase 3 needs embeddings before storage/search mean anything; isolating the embedding model from any database layer means a bug can only be in one place.
+- **Files changed:** `services/embedder.py`, `tests/test_embedder.py`, `requirements.txt` (added `sentence-transformers`).
+- **Command used:** `.venv/bin/python -m pytest -v`
+- **Observed result:** 14/14 tests passed. Manual check showed real cosine scores: cat-sentence pair 0.612, unrelated pair 0.075, and — notably — a negated drug-approval pair scored 0.888, *higher* than the genuinely similar pair. Confirms the negation failure mode predicted in `Interview_prep.md` §1 with real numbers.
+- **Remaining work:** none for this unit. Negation failure is expected and tracked for Phase 9, not something to fix now.
+
+Next: pgvector schema + Docker Compose Postgres, plus exact (brute-force) top-k similarity search via SQL — pending approval.

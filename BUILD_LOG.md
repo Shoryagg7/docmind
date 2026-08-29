@@ -67,3 +67,15 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Resume claim earned:** **"Built a PDF ingestion pipeline that extracts and chunks document text with overlap-preserving boundaries."** Earned now because the full path (real PDF file → extracted text → overlapping chunks) has actually run and been observed, not just its individual pieces.
 
 **Phase 2 complete.** Code track (PDF ingest, chunker) fully built and observed end-to-end; concept track (chunking strategy and trade-offs) written in `Interview_prep.md` §3.
+
+---
+
+## Unit 6 — Embedder (sentence-transformers, no database yet)
+
+- **Concept touched:** embeddings and cosine similarity — first time these are computed in real, running code rather than discussed in `Interview_prep.md` §1–2.
+- **Files changed:** `services/embedder.py` (new), `tests/test_embedder.py` (new), `requirements.txt` (added `sentence-transformers>=3.0`, which pulled in `torch`).
+- **Design decision:** embeddings are L2-normalized at encode time (`normalize_embeddings=True`) so cosine similarity reduces to a plain dot product — matches how pgvector will be used in the next unit. Deliberately not wired to any database yet: verifying the model behaves correctly in isolation means a wrong-looking score can only be the model's fault, not the storage/query layer's, in the next unit.
+- **Test/command run:** `.venv/bin/python -m pytest -v`
+- **Observed behavior:** 14/14 tests passed. First run took ~75s (one-time model weight download); subsequent runs are fast. Real cosine scores: cat-sentence pair 0.612, unrelated pair 0.075.
+- **Failure mode discovered:** the negation gotcha predicted in `Interview_prep.md` §1 confirmed with real numbers — "The drug is approved for adult use" vs. "The drug is NOT approved for adult use" scored **0.888**, higher than the genuinely similar cat-sentence pair. Embedding similarity alone cannot distinguish agreement from contradiction; this is exactly why Phase 9 exists.
+- **Resume claim earned:** none new yet — embedding in isolation isn't "semantic search." That's earned once pgvector storage and top-k SQL retrieval exist and return correct real results.
