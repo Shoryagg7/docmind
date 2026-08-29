@@ -53,3 +53,17 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Observed behavior:** 10/10 tests passed; a manual demo showed a planted phrase ("thirty days written notice") straddling a chunk boundary was split and unrecoverable in any single chunk with `overlap=1`, but intact in one chunk with `overlap=30` — same underlying text, only the overlap parameter changed.
 - **Failure mode discovered:** none new beyond the already-guarded `overlap >= chunk_size` case; the more interesting "failure" was the intentional boundary-split demo above, which motivates overlap existing at all.
 - **Resume claim earned:** none yet — chunking in isolation isn't a resume claim; it becomes one once chunks flow into embeddings + storage + retrieval.
+
+---
+
+## Unit 5 — Ingest pipeline (extraction + chunking composed)
+
+- **Concept touched:** none new — pure composition of Units 3 and 4. Worth logging as its own unit because it's the first point Phase 2's actual code-track deliverable ("PDF ingest") is observed working, not just its parts in isolation.
+- **Files changed:** `services/ingest.py` (new), `tests/test_ingest.py` (new).
+- **Design decision:** kept as a plain function, deliberately not wired to a FastAPI upload endpoint — no router/app layer exists anywhere in the repo yet, and standing one up now would mean scaffolding an architectural layer (app entrypoint, routers/, multipart handling, error-class wrapping) ahead of when Phase 4 (naive RAG end-to-end) actually needs it.
+- **Test/command run:** `.venv/bin/python -m pytest -v`
+- **Observed behavior:** 12/12 tests passed; manual run on the real fixture (`chunk_size=40, overlap=10`) produced 3 chunks, with a phrase spanning the chunk 0/1 boundary surviving intact due to overlap.
+- **Failure mode discovered:** confirmed (didn't discover new) — `pypdf.errors.PdfStreamError` from a corrupted/non-PDF file propagates unchanged through the composed pipeline. Flagged as future work: needs to become a custom error class once an HTTP boundary exists to catch it, per the project's "no bare generic exceptions for expected application failures" convention.
+- **Resume claim earned:** **"Built a PDF ingestion pipeline that extracts and chunks document text with overlap-preserving boundaries."** Earned now because the full path (real PDF file → extracted text → overlapping chunks) has actually run and been observed, not just its individual pieces.
+
+**Phase 2 complete.** Code track (PDF ingest, chunker) fully built and observed end-to-end; concept track (chunking strategy and trade-offs) written in `Interview_prep.md` §3.

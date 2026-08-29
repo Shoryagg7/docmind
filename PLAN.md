@@ -7,7 +7,7 @@ Agentic RAG document assistant. Built one small, observable unit at a time per `
 | # | Concept track | Code track | Status |
 |---|---|---|---|
 | 1 | Embeddings, cosine similarity | Skeleton, config, Groq client | Done |
-| 2 | Chunking strategy and trade-offs | PDF ingest, chunker | Not started |
+| 2 | Chunking strategy and trade-offs | PDF ingest, chunker | Done |
 | 3 | Vector indexes, HNSW vs exact | pgvector schema, top-k search | Not started |
 | 4 | Prompting, grounding, citations | Naive RAG end-to-end | Not started |
 | 5 | Chains vs graphs, state, reducers | LangGraph rewrite | Not started |
@@ -63,6 +63,16 @@ Units are logged here as they're completed. See `BUILD_LOG.md` for the detailed 
 - **Design decision:** character-based, not token-based, chunking — the simplest mechanism to observe directly; introducing the embedding model's tokenizer here would pull in a Phase 3 abstraction before chunking itself is understood.
 - **Remaining work:** none for this unit. Interview_prep.md §3 written alongside (developer requested side-by-side, not at phase end, for this one).
 
+### Unit 5 — Ingest pipeline (extraction + chunking composed)
+
+- **What:** `services/ingest.py` with `ingest_pdf(pdf_path, chunk_size=500, overlap=50) -> list[str]`, composing `extract_text` + `chunk_text`.
+- **Why:** last piece needed to observe Phase 2's "PDF ingest" code-track item end-to-end, not just as two separately-tested units.
+- **Files changed:** `services/ingest.py`, `tests/test_ingest.py`.
+- **Command used:** `.venv/bin/python -m pytest -v`
+- **Observed result:** 12/12 tests passed. Manual run against the real fixture with `chunk_size=40, overlap=10` showed 3 chunks, with the phrase "line prov...proves" correctly surviving intact across the chunk 0/1 boundary.
+- **Design decision:** plain function composition, no FastAPI route yet — no router/app layer exists in the repo; HTTP wiring deferred to Phase 4 when the API surface is actually needed.
+- **Remaining work:** the `PdfStreamError` failure mode (confirmed to propagate unchanged through the composed pipeline) will need to be caught and mapped to a custom error class once an HTTP upload endpoint exists — not needed yet.
+
 ## Remaining work (current phase)
 
-Phase 2 code (extraction + chunker) done. Not yet built: an upload endpoint tying the two together, and pgvector storage (Phase 3) to actually persist chunks. Phase 2 isn't "complete" in the CLAUDE.md sense until that behavior is observed end-to-end, even though both underlying units work.
+**Phase 2 complete.** Code track (PDF ingest, chunker) fully built and observed end-to-end via `ingest_pdf`; concept track (chunking strategy and trade-offs) written in `Interview_prep.md` §3. Next: Phase 3 — pgvector schema + top-k search, starting with generating embeddings for chunks via `sentence-transformers`.
