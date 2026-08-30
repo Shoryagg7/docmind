@@ -9,6 +9,9 @@ Deep conceptual explanations, written so Shorya can defend every design decision
 **What it is**
 An embedding is a fixed-length vector of floating-point numbers that represents the *meaning* of a piece of text. A sentence-embedding model maps any input text to a point in a high-dimensional space (384 dimensions for `all-MiniLM-L6-v2`) such that texts with similar meaning land close together, and texts with different meaning land far apart. The model is trained so that geometric closeness in vector space approximates semantic closeness in meaning — that's what lets a query like "what did the contract say about termination" retrieve a chunk saying "either party may end this agreement with 30 days notice," even though the two share almost no words.
 
+**Where it lives**
+`services/embedder.py::embed_text()` — used twice: `services/vector_store.py::store_chunks()` embeds every chunk at upload time, and `services/vector_store.py::search()` embeds the incoming query at retrieval time, both against the same 384-dim `all-MiniLM-L6-v2` model so the two sides of the comparison are in the same space.
+
 **Why we chose it**
 Requirement: DocMind must find document chunks relevant to a natural-language question without relying on exact keyword overlap.
 Choice: `sentence-transformers` with `all-MiniLM-L6-v2` to embed both chunks and queries into 384-dim vectors.
@@ -35,6 +38,9 @@ Embeddings capture semantic *similarity*, not logical or factual correctness —
 
 **What it is**
 Cosine similarity measures the *angle* between two vectors, ignoring their magnitude — it answers "do these two vectors point in the same direction," not "how far apart are their endpoints." It's the dot product of two vectors divided by the product of their magnitudes, ranging from -1 (opposite direction) to 1 (identical direction), with 0 meaning unrelated/orthogonal. Euclidean distance instead measures straight-line distance between the two points, which is sensitive to vector length as well as direction.
+
+**Where it lives**
+`services/vector_store.py::search()` — `Chunk.embedding.cosine_distance(query_embedding)` in the `ORDER BY` clause (compiles to pgvector's `<=>` operator). The same metric is baked into the HNSW index's operator class, `vector_cosine_ops`, in `alembic/versions/4b925de70d4b_add_hnsw_index_on_chunks_embedding.py`.
 
 **Why we chose it**
 Requirement: rank document chunks by how relevant they are to a query embedding.
@@ -63,6 +69,9 @@ Cosine similarity assumes a well-normalized embedding space — mix embeddings f
 **What it is**
 Chunking is splitting a document into smaller pieces before embedding and storing them, because you can't (and shouldn't) embed or retrieve an entire document as one unit — an embedding model compresses text into a single fixed-size vector, and the more text you cram in, the more that vector becomes an average of many unrelated ideas, diluting the very signal retrieval depends on. DocMind's chunker (`services/chunker.py`) uses a fixed-size sliding window: take `chunk_size` characters, then slide forward by `chunk_size - overlap` (not the full `chunk_size`), so consecutive chunks share a trailing/leading region of text. That shared region — the overlap — exists purely to stop a sentence or clause that happens to fall across a chunk boundary from being truncated in both of the chunks it lands in.
 
+**Where it lives**
+`services/chunker.py::chunk_text(text, chunk_size=500, overlap=50)`, called from `services/ingest.py::ingest_pdf()`, which composes it with `pdf_extractor.py::extract_text()` and is invoked by `routers/documents.py`'s `POST /documents` on every upload.
+
 **Why we chose it**
 Requirement: split extracted PDF text into pieces small enough to embed meaningfully, without losing information that straddles a split point.
 Choice: character-based fixed-size chunking with a configurable overlap (defaults: 500 chars, 50 overlap).
@@ -89,6 +98,9 @@ Chunk size and overlap are a trade-off, not a free parameter to maximize: too sm
 
 **What it is**
 Top-k retrieval means: given a query embedding, find the k stored chunk embeddings closest to it. The direct way to do this — exact search — computes the distance between the query and *every single row*, sorts, and returns the top k. It's correct by construction (there's no approximation anywhere), but it's O(n) per query: double the rows, double the work. HNSW (Hierarchical Navigable Small World) is an *index* that trades a small amount of correctness for speed at scale: it pre-builds a graph structure over the stored vectors at insert time, so a query can navigate straight toward the neighborhood of likely-closest vectors instead of touching every row — sub-linear query time, but it can occasionally miss the true nearest neighbor in exchange for that speed, which is why it's called *approximate* nearest neighbor (ANN) search.
+
+**Where it lives**
+Exact search (no index) built first in `services/vector_store.py::search()` (Unit 8). The HNSW index was added purely at the schema level in `alembic/versions/4b925de70d4b_add_hnsw_index_on_chunks_embedding.py` (Unit 9) — `search()`'s query code didn't change at all; only the query plan Postgres chooses for it did.
 
 **Why we chose it**
 Requirement: retrieve the top-k most relevant chunks for a query, correctly, and understand when an index actually helps versus when it's dead weight.
@@ -119,6 +131,9 @@ The single most dangerous failure mode I hit in this whole phase wasn't the inde
 
 Separately, `search()` gained an optional equality filter: `WHERE source = :source`, combined in the same query with the existing `ORDER BY embedding <=> :query` ranking. This is document/metadata scoping — restricting the vector search to rows matching an exact structured condition before or alongside ranking by similarity. It's a very common real RAG pattern (often called "filtered vector search"), and it's exactly what stops one uploaded document's chunks from silently competing with another's for the same top-k slots.
 
+**Where it lives**
+`services/vector_store.py::search(session, query, k=3, source=None)` — the `source` param adds `.where(Chunk.source == source)`, backed by the B-tree index in `alembic/versions/3002213eec16_add_btree_index_on_chunks_source.py`. `k` and `source` both flow in from `schemas/query.py::QueryRequest` via `routers/query.py`. The citation-filtering fix lives in `services/rag.py::answer_question()` (and is mirrored in `services/graph.py::generate_node`, the version actually serving `/query` today).
+
 **Why we chose it**
 Requirement: answer "list all X" questions completely; keep citations honest (only show what was actually used); let a query be restricted to one uploaded document instead of the whole corpus.
 Choice: keep `k` as a per-query parameter (not hardcoded), default modest but overridable; filter `sources` post-generation to only cited chunk IDs; add an optional `source` equality filter alongside the existing similarity ordering.
@@ -144,6 +159,9 @@ Two indexes are doing two completely different jobs here, and conflating them is
 
 **What it is**
 Grounding means constraining an LLM's answer to only use information that was actually retrieved and handed to it in the prompt, instead of freely drawing on whatever it memorized during pretraining. There's no special API flag for this — it's done by instruction: the system prompt explicitly tells the model "answer only from the provided context; if the context doesn't contain the answer, say you don't know," and the retrieved chunks are pasted into the prompt, numbered, so the model can reference them. Citations are the model tagging each claim with which numbered chunk it came from (`[1]`, `[2]`), so a reader can trace an answer back to its source instead of trusting it blindly. Both are prompt-engineering techniques, not architectural guarantees — the model is *asked* to behave this way, not *forced* to.
+
+**Where it lives**
+`services/rag.py::SYSTEM_PROMPT` and `CITATION_PATTERN` (the `[n]`-parsing regex). Originally exercised via `services/rag.py::answer_question()`; that function still exists (kept as the "before" reference implementation) but as of Phase 6 the same prompt/citation logic runs inside `services/graph.py::generate_node`, which is what `routers/query.py` actually calls now.
 
 **Why we chose it**
 Requirement: answers need to be traceable to actual document content, and the system needs to visibly refuse to answer when the retrieved context doesn't actually contain the answer, rather than confidently making something up.
@@ -172,22 +190,55 @@ Grounding failing doesn't look like an error — it looks like a plausible, conf
 **What it is**
 A chain is a fixed, linear pipeline: step A always runs, then step B, then it's done — no branching, no revisiting an earlier step. That's exactly what `services/rag.py`'s `answer_question()` was: retrieve, then generate, always in that order, no way to say "actually, go back and retrieve again with a better query." A graph generalizes this: nodes (functions) connected by edges, with **shared state** flowing between them, and — the actual point of switching — edges can be *conditional*, so a node's output can decide which node runs next, including looping back to an earlier node. In LangGraph specifically, state is a typed dict (`RAGState` here), and each node returns only the keys it wants to update; the framework merges that partial update into the full state before the next node runs.
 
+**Where it lives**
+`services/graph.py`, the whole file. As of Phase 6 it's a 4-node graph — `retrieve`, `grade`, `rewrite`, `generate` — with a conditional edge out of `grade`, and it's what `routers/query.py` actually calls on every `POST /query` (via `answer_question_graph`), not just a side experiment.
+
 **Why we chose it**
-Requirement: the naive RAG loop needs to eventually support retrying a bad first retrieval (Phase 6) — grading the retrieved chunks and, if they're weak, rewriting the query and trying again, bounded so it can't loop forever.
-Choice: rebuild the existing retrieve→generate flow as a LangGraph `StateGraph` first, with **zero new behavior** — same two steps, same order, same output — before adding the actual grading/retry logic in a separate phase.
-Benefit: this isolates "does the graph mechanism work" from "does the new self-correction logic work" — proven directly, by running the same question through both the old function and the new graph and getting matching answers and citations. If Phase 6 breaks something, it's provably not the graph plumbing's fault.
-Cost: a graph is real added complexity over a plain function call — more moving parts (state shape, node wiring, compilation) for something that, at this stage, does exactly what five lines of Python already did. That cost is only worth paying because Phase 6 needs the conditional-looping capability a chain structurally cannot express.
+Requirement: the naive RAG loop needed to eventually support retrying a bad first retrieval (Phase 6) — grading the retrieved chunks and, if they're weak, rewriting the query and trying again, bounded so it can't loop forever.
+Choice: rebuild the existing retrieve→generate flow as a LangGraph `StateGraph` first, with **zero new behavior** (Unit 13), then add `grade`/`rewrite` nodes, a conditional edge, and a `retry_count` reducer on top of a graph already proven to work (Unit 15), and only then swap the route over to it (Unit 16).
+Benefit: this staged build isolated "does the graph mechanism work" from "does the new self-correction logic work" — and it paid off exactly as planned: Unit 13 proved the 2-node graph matched the old function's output; Unit 15 then added the loop and any bug from that point on was provably new-logic, not graph plumbing.
+Cost: a graph is real added complexity over a plain function call — 4 nodes, a conditional edge, and a reducer, versus what used to be five lines of sequential Python. That cost is only worth paying because the conditional-looping capability (retry on bad retrieval) is something a chain structurally cannot express.
 Rejected alternative: skip straight to building the grading/retry logic *and* the graph structure in one step. Rejected because it's exactly the situation `CLAUDE.md` warns against — introducing a framework abstraction (LangGraph) at the same time as new logic (grading, rewriting) makes it impossible to tell, if something's wrong, whether the graph is misconfigured or the new logic is buggy.
 
 **Soundbite**
-"A chain is fixed — A then B then done. A graph adds state that flows between nodes and, more importantly, edges that can be conditional, so a node can decide to loop back instead of always moving forward. I didn't build the graph and the new retry logic at the same time — I rebuilt the *exact same* retrieve-then-generate flow as a 2-node graph first, with no new behavior, and proved it gives identical output to the plain function it replaced. That way, when Phase 6 adds the actual grading and retry loop, any bug I hit is provably in the new logic, not in the graph plumbing itself."
+"A chain is fixed — A then B then done. A graph adds state that flows between nodes and, more importantly, edges that can be conditional, so a node can decide to loop back instead of always moving forward. I built this in two passes: first a 2-node graph that did nothing new — just proved the plumbing worked by matching the old function's output exactly — then added a `grade` node, a `rewrite` node, and a conditional edge on top of that already-working base. `/query` calls this graph directly now, not the old straight-line function."
 
 **The gotcha**
-LangGraph's default behavior when a node returns a state update is to *overwrite* whatever was there — last writer wins. That's invisible and harmless right now because `retrieve` and `generate` never touch the same key. It stops being harmless the moment a loop is introduced: a retry counter that's supposed to *accumulate* across iterations (1, 2, 3...) would just get reset to whatever the node returns each time, silently breaking the "bounded" part of "bounded retries," unless it's given an explicit reducer (e.g., `Annotated[int, operator.add]`) that tells LangGraph how to combine the old value with the new one instead of replacing it. This is exactly the kind of thing that looks fine in a 2-node graph and breaks the moment you add a loop — worth testing for explicitly once Phase 6 lands, not assuming it "just works" the same way.
+LangGraph's default behavior when a node returns a state update is to *overwrite* whatever was there — last writer wins. That's invisible and harmless for `retrieve`→`generate`, since they never touch the same key. It stops being harmless the moment a loop is introduced: a retry counter that's supposed to *accumulate* across iterations (1, 2, 3...) would just get reset to whatever the node returns each time, silently breaking the "bounded" part of "bounded retries," unless it's given an explicit reducer. This wasn't just theoretical — I gave `retry_count` the type `Annotated[int, operator.add]` and had `rewrite_node` return `{"retry_count": 1}` (a delta, not an absolute value) on every call, and confirmed via a forced-retry test that it actually accumulated correctly: `retry_count` went 0 → 1 → 2 across two rewrite passes, and the graph terminated on the third grading pass instead of looping forever.
 
 **Self-test**
 - What can a graph express that a chain structurally cannot, and why does that matter for a self-correcting retrieval loop specifically?
 - What does a LangGraph node actually return, and what does the framework do with that return value?
 - Why does the default state-merge behavior (overwrite per key) work fine for `retrieve`→`generate` but fail silently once a retry loop is added?
-- What's a reducer, concretely, and what problem does `Annotated[int, operator.add]` solve that the default merge behavior doesn't?
+- What's a reducer, concretely, and what problem does `Annotated[int, operator.add]` solve that the default merge behavior doesn't? Why does `rewrite_node` return `{"retry_count": 1}` instead of computing the new total itself?
 - Why was it worth building a graph with no new behavior first, instead of building the graph and the grading/retry logic together in one step?
+
+---
+
+## 8. Self-Correction: Relevance Grading and Bounded Query Rewrite
+
+**What it is**
+Self-correction in a RAG pipeline means the system checks its own intermediate work — here, whether the chunks it retrieved actually help answer the question — and takes a corrective action if not, instead of blindly generating an answer from whatever `search()` happened to return. Two pieces make this work together: a **relevance grader**, an LLM call that looks at one retrieved chunk plus the query and answers yes/no ("does this chunk help answer this question?"); and a **bounded retry loop**, a conditional edge that routes to a `rewrite` node (which asks the LLM to rephrase the query) and back to `retrieve` when grading comes back empty — but only while a retry counter is still under a fixed cap, after which it gives up and generates (or admits "I don't know") instead of looping forever.
+
+**Where it lives**
+`services/grader.py::grade_relevance(query, chunk_content) -> bool` — the standalone grading call. `services/graph.py::grade_node` applies it to every retrieved chunk; `rewrite_node` calls the LLM to rephrase the query and returns a `retry_count` delta; `should_retry` is the conditional-edge function deciding `rewrite` vs. `generate` based on `relevant_chunks` and `retry_count < MAX_RETRIES` (`MAX_RETRIES = 2`).
+
+**Why we chose it**
+Requirement: retrieval isn't always going to nail it on the first try — a query phrased differently than the document's wording can return chunks that don't actually help, and the system needs to notice that and try again, not just confidently answer from noise.
+Choice: LLM-as-judge grading per chunk, feeding a conditional edge with a hard-capped retry counter (`MAX_RETRIES = 2`).
+Benefit: proven directly, not just argued — a forced-failure test (a question the scoped document genuinely can't answer) showed the graph grade `0` relevant chunks, rewrite the query, retry, grade `0` again, rewrite again, retry again, then stop and return an honest "I don't know" on the third pass rather than looping indefinitely.
+Cost: real latency and LLM-call cost — grading is one LLM call *per retrieved chunk* (so `k` calls), plus one more per rewrite attempt. A query that fails to ground can now cost up to `k + MAX_RETRIES` extra LLM calls before it gives up. This is a genuine trade-off between answer quality and response time/cost that has to be defended, not hand-waved.
+Rejected alternative: use the cosine-distance score from `search()` itself as the relevance signal (a threshold on `<=>` distance) instead of a separate LLM call. Rejected because a chunk can be embedding-close to a query without actually answering it — the classic case being negation (already documented as a known embedding failure mode, Phase 9) — where a distance threshold would pass a chunk that says the opposite of what's true. LLM-as-judge catches that kind of semantic mismatch; a pure distance cutoff can't.
+
+**Soundbite**
+"Instead of trusting whatever `search()` returns, I grade each retrieved chunk with a cheap LLM call asking 'does this actually help answer the question' — and if nothing passes, a conditional edge routes to a rewrite node that rephrases the query and tries retrieval again, capped at two retries. I proved the loop actually terminates, not just that it's supposed to: I ran a question the scoped document genuinely can't answer and watched it grade zero, rewrite, retry, grade zero again, rewrite again, retry again, and then stop and say 'I don't know' on the third pass instead of looping forever."
+
+**The gotcha**
+This retry loop makes the system slower and more expensive to fail, not smarter at succeeding — rewriting the query doesn't guarantee a better retrieval; in the forced-failure test, both rewritten queries still retrieved nothing relevant, because the document genuinely didn't contain the answer. Bounded retries protect against infinite loops, not against wasted work: a query that's fundamentally unanswerable from the corpus still burns `k` grading calls plus up to `MAX_RETRIES` rewrite-and-regrade cycles before giving up exactly the same "I don't know" a single ungraded attempt would have produced faster. Grading and retrying is a real quality lever for queries that fail due to *phrasing* mismatch, not for queries that fail because the answer simply isn't in the documents — and it's easy to conflate the two in an interview if you haven't tested both cases yourself.
+
+**Self-test**
+- What's the actual signal that decides whether the graph retries or moves on to `generate`?
+- Why is LLM-as-judge grading a stronger check than a plain cosine-distance threshold, and what specific failure mode (already documented elsewhere in this project) does distance-only filtering miss?
+- What is the real cost of this loop, concretely, in number of extra LLM calls, for a query that fails grading every single time up to the retry cap?
+- Rewriting the query and retrying doesn't guarantee a better result — under what condition does the retry loop actually help, and under what condition is it just wasted latency/cost for the same eventual answer?
+- What would happen if `MAX_RETRIES` were removed entirely and the conditional edge only checked `relevant_chunks` being empty? Walk through the failure.

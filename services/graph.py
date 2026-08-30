@@ -1,12 +1,22 @@
-from typing import TypedDict
+import operator
+from typing import Annotated, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.models import Chunk
+from services.grader import grade_relevance
 from services.llm_client import generate
 from services.rag import CITATION_PATTERN, SYSTEM_PROMPT
 from services.vector_store import search
+
+MAX_RETRIES = 2
+
+REWRITE_SYSTEM_PROMPT = (
+    "You rewrite search queries that failed to retrieve relevant results. "
+    "Given the original question, produce one rephrased version more likely to "
+    "match relevant document text. Reply with only the rewritten question, nothing else."
+)
 
 
 class RAGState(TypedDict):
@@ -14,8 +24,10 @@ class RAGState(TypedDict):
     k: int
     source: str | None
     chunks: list[Chunk]
+    relevant_chunks: list[Chunk]
     answer: str
     sources: list[dict]
+    retry_count: Annotated[int, operator.add]
 
 
 def build_graph(session: AsyncSession):
@@ -23,8 +35,21 @@ def build_graph(session: AsyncSession):
         chunks = await search(session, state["query"], k=state["k"], source=state["source"])
         return {"chunks": chunks}
 
+    async def grade_node(state: RAGState) -> dict:
+        relevant = [c for c in state["chunks"] if grade_relevance(state["query"], c.content)]
+        return {"relevant_chunks": relevant}
+
+    async def rewrite_node(state: RAGState) -> dict:
+        rewritten = generate(state["query"], system=REWRITE_SYSTEM_PROMPT)
+        return {"query": rewritten.strip(), "retry_count": 1}
+
+    def should_retry(state: RAGState) -> str:
+        if not state["relevant_chunks"] and state["retry_count"] < MAX_RETRIES:
+            return "rewrite"
+        return "generate"
+
     async def generate_node(state: RAGState) -> dict:
-        chunks = state["chunks"]
+        chunks = state["relevant_chunks"]
         if not chunks:
             return {"answer": "I don't know — no relevant documents found.", "sources": []}
 
@@ -43,9 +68,15 @@ def build_graph(session: AsyncSession):
 
     graph = StateGraph(RAGState)
     graph.add_node("retrieve", retrieve_node)
+    graph.add_node("grade", grade_node)
+    graph.add_node("rewrite", rewrite_node)
     graph.add_node("generate", generate_node)
     graph.add_edge(START, "retrieve")
-    graph.add_edge("retrieve", "generate")
+    graph.add_edge("retrieve", "grade")
+    graph.add_conditional_edges(
+        "grade", should_retry, {"rewrite": "rewrite", "generate": "generate"}
+    )
+    graph.add_edge("rewrite", "retrieve")
     graph.add_edge("generate", END)
 
     return graph.compile()
@@ -56,6 +87,15 @@ async def answer_question_graph(
 ) -> dict:
     graph = build_graph(session)
     result = await graph.ainvoke(
-        {"query": query, "k": k, "source": source, "chunks": [], "answer": "", "sources": []}
+        {
+            "query": query,
+            "k": k,
+            "source": source,
+            "chunks": [],
+            "relevant_chunks": [],
+            "answer": "",
+            "sources": [],
+            "retry_count": 0,
+        }
     )
     return {"answer": result["answer"], "sources": result["sources"]}

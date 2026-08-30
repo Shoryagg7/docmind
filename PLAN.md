@@ -11,7 +11,7 @@ Agentic RAG document assistant. Built one small, observable unit at a time per `
 | 3 | Vector indexes, HNSW vs exact | pgvector schema, top-k search | Done |
 | 4 | Prompting, grounding, citations | Naive RAG end-to-end | Done |
 | 5 | Chains vs graphs, state, reducers | LangGraph rewrite | Done |
-| 6 | Self-correction, bounded loops | Relevance grader + query rewrite | Not started |
+| 6 | Self-correction, bounded loops | Relevance grader + query rewrite | Done |
 | 7 | Eval methodology, LLM-as-judge | 25-question golden set | Not started |
 | 8 | Cache semantics, TTL, thresholds | Redis semantic cache | Not started |
 | 9 | Embedding failure modes | Negation set + threshold tuning | Not started |
@@ -187,6 +187,42 @@ Found via real usage (developer uploaded their own resume) rather than planned w
 
 **Phase 5 complete.** Code track (LangGraph rewrite) observed producing identical results to the pre-graph implementation; concept track (chains vs. graphs, state, reducers) written in `Interview_prep.md` §7.
 
+## Phase 6 — Self-correction, bounded loops
+
+### Unit 14 — Relevance grader (standalone)
+
+- **What:** `services/grader.py` with `grade_relevance(query, chunk_content) -> bool` — one LLM call, forced to a strict yes/no reply via a dedicated system prompt.
+- **Why:** the conditional edge Phase 6 needs can't be built without a signal to condition on first; isolating the grader means it can be verified correct before any control flow depends on it.
+- **Files changed:** `services/grader.py`.
+- **Command used:** `.venv/bin/python -m services.grader`
+- **Observed result:** correctly graded a genuinely relevant chunk as relevant and a genuinely irrelevant chunk as irrelevant, on real content from `sample.pdf`/`sample2.pdf`.
+- **Design decision:** rejected using `search()`'s own cosine-distance score as the relevance signal — a chunk can be embedding-close without answering the question (negation is the sharpest case, already documented in `Interview_prep.md` §1); LLM-as-judge catches that, a distance cutoff can't.
+- **Remaining work:** not yet wired into the graph — next unit.
+
+### Unit 15 — Graph rewired: grade + rewrite nodes, conditional edge, bounded retry
+
+- **What:** `services/graph.py` extended with `grade_node`, `rewrite_node`, a `should_retry` conditional-edge function, `MAX_RETRIES = 2`, and `retry_count: Annotated[int, operator.add]` added to `RAGState`. Edges: `retrieve → grade → (rewrite | generate)`, `rewrite → retrieve`.
+- **Why:** the actual self-correction mechanics — grading retrieved chunks and retrying with a rewritten query when they're weak, bounded so it can't loop forever.
+- **Files changed:** `services/graph.py`.
+- **Command used:** normal-path re-run of the graph against `sample.pdf`; a forced-failure trace via `graph.astream()` asking a question the scoped document can't answer.
+- **Observed result:** normal path unchanged. Forced failure: graded 0 relevant chunks → rewrote the query → graded 0 again → rewrote a second time → graded 0 a third time → routed to `generate`, returning `"I don't know"` instead of looping again. `retry_count` accumulated 0 → 1 → 2 correctly via the reducer.
+- **Design decision:** `retry_count` uses `Annotated[int, operator.add]` so `rewrite_node` returns a delta (`{"retry_count": 1}`) instead of computing the running total itself — the concrete case the reducer concept was flagged for back in Unit 13.
+- **Remaining work:** still not wired into `/query` — next unit.
+
+### Unit 16 — Wired the graph into `/query`
+
+- **What:** `routers/query.py` now calls `services.graph.answer_question_graph` instead of `services.rag.answer_question`.
+- **Why:** last step to make the self-correcting graph the actual code path serving real queries, not just something exercised in test scripts.
+- **Files changed:** `routers/query.py`.
+- **Command used:** `.venv/bin/uvicorn main:app --port 8001`; `curl -X POST http://localhost:8001/query` with a real question against `sample.pdf`.
+- **Observed result:** `{"answer": "Maya Chen works in Toronto. [1]", "sources": [...]}` — correct grounded answer with citation, now actually served by the graph.
+- **Design decision:** `services/rag.py::answer_question()` kept in the codebase, unused by any route — the "before" reference implementation, referenced by `Interview_prep.md` §6/§7 and the retrieval-pipeline diagram.
+- **Remaining work:** none for Phase 6 itself.
+
 ## Remaining work (current phase)
 
-Phase 6 next: relevance-grading node + query-rewrite node + a conditional edge looping back to `retrieve` on a poor grade, bounded to prevent infinite retries — pending its own proposal/approval. This is where `services/graph.py` actually changes shape and needs its first custom reducer.
+**Phase 6 complete.** Code track (relevance grader, query rewrite, conditional edge, bounded retry) built, wired into `/query`, and observed on both the happy path and a forced failure exercising the full retry-then-give-up behavior. Concept track (self-correction, bounded loops) written in `Interview_prep.md` §8; §7 updated to reflect the graph's final 4-node shape.
+
+**Earned claim:** "Built an agentic RAG pipeline in LangGraph with self-correcting retrieval — a relevance-grading node and bounded query-rewrite retries — serving live queries end-to-end."
+
+Phase 7 next: 25-question golden eval set (eval methodology, LLM-as-judge) — pending its own proposal/approval.

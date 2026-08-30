@@ -169,3 +169,41 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Resume claim earned:** none new yet — a graph that reproduces the old function's output isn't "agentic" anything. That's earned in Phase 6, once the graph actually grades, retries, and rewrites.
 
 **Phase 5 complete.** Code track (LangGraph rewrite) observed producing identical results to the pre-graph implementation; concept track (chains vs. graphs, state, reducers) written in `Interview_prep.md` §7.
+
+---
+
+## Unit 14 — Relevance grader (standalone, not wired to the graph)
+
+- **Concept touched:** relevance grading / LLM-as-judge.
+- **Files changed:** `services/grader.py` (new).
+- **Design decision:** one LLM call per chunk, forced to a strict `yes`/`no` reply via a dedicated system prompt (`GRADER_SYSTEM_PROMPT`), parsed by checking the reply starts with "yes". Kept fully standalone — no graph, no conditional edge — so the grading mechanism itself could be verified correct in isolation before wiring it into any control flow. Rejected alternative: threshold on `search()`'s own cosine-distance score instead of a separate LLM call — rejected because a chunk can be embedding-close without actually answering the question (the negation failure mode already documented in `Interview_prep.md` §1 is the sharpest example); LLM-as-judge catches that, a pure distance cutoff can't.
+- **Test/command run:** `.venv/bin/python -m services.grader`
+- **Observed behavior:** graded a genuinely relevant chunk (Maya Chen's city) as relevant (`True`) and a genuinely irrelevant chunk (Nimbus Cloud Storage pricing) as irrelevant (`False`) — correct in both directions on real content.
+- **Failure mode discovered:** none new — this unit was about proving the grading signal is trustworthy before building anything on top of it.
+- **Resume claim earned:** none yet — a grading function that isn't wired into anything doesn't earn "self-correcting retrieval." That lands once it's part of the actual retry loop.
+
+---
+
+## Unit 15 — Graph rewired: grade + rewrite nodes, conditional edge, bounded retry
+
+- **Concept touched:** self-correction / bounded retries via reducers.
+- **Files changed:** `services/graph.py` (added `grade_node`, `rewrite_node`, `should_retry` conditional function, `MAX_RETRIES = 2`, `retry_count: Annotated[int, operator.add]` in `RAGState`; rewired edges to `retrieve → grade → (conditional: rewrite | generate)`, `rewrite → retrieve`).
+- **Design decision:** `retry_count` uses a custom reducer (`operator.add`) so `rewrite_node` can return a delta (`{"retry_count": 1}`) each time it fires, rather than needing to read and recompute the running total itself — the concrete case the reducer concept (introduced in Unit 13/§7) was flagged for but hadn't yet been exercised. `should_retry` checks both `relevant_chunks` being empty *and* `retry_count < MAX_RETRIES`, so the bound is enforced by application logic, not by any framework-level step limit.
+- **Test/command run:** (1) normal-path re-run of the Maya Chen query through `answer_question_graph` — no regression. (2) A forced-failure script using `graph.astream()` to trace node-by-node execution, asking a question the scoped document genuinely cannot answer.
+- **Observed behavior:** normal path unchanged (`"Maya Chen works in Toronto. [1]"`). Forced-failure trace: `grade` found 0 relevant chunks → `rewrite` produced a rephrased query → `grade` found 0 again → `rewrite` fired a second time → `grade` found 0 a third time → routed to `generate`, which returned `"I don't know — no relevant documents found."` instead of looping a third time. `retry_count` correctly accumulated 0 → 1 → 2 across the two rewrite passes.
+- **Failure mode discovered:** none new — the loop terminated exactly as designed on the first real test; no infinite-loop or reducer-not-applied bug was hit, but the test was specifically designed to be capable of exposing one (an unbounded or non-accumulating counter would have looped a third time or errored on LangGraph's internal recursion limit instead of stopping cleanly at `MAX_RETRIES`).
+- **Resume claim earned:** none new yet — the graph now has the mechanics of self-correction, but it isn't serving live traffic yet (`/query` still calls the old `answer_question`). That's Unit 16.
+
+---
+
+## Unit 16 — Wired the graph into `/query`
+
+- **Concept touched:** none new — this is the point the previous two units' work becomes real, not additional GenAI concept.
+- **Files changed:** `routers/query.py` (swapped `services.rag.answer_question` for `services.graph.answer_question_graph`).
+- **Design decision:** `services/rag.py`'s `answer_question()` is left in place, unused by any route — kept as the "before" reference implementation (and what `Interview_prep.md` §6/§7 and the retrieval-pipeline diagram compare against), not deleted.
+- **Test/command run:** started the real server (`.venv/bin/uvicorn main:app --port 8001`), `curl -X POST http://localhost:8001/query` with a real question against `sample.pdf`.
+- **Observed behavior:** `{"answer": "Maya Chen works in Toronto. [1]", "sources": [...]}` — identical, correct grounded answer with citation, now actually served by the graph (retrieve → grade → generate on this query, since grading passed first try).
+- **Failure mode discovered:** none — this unit was wiring, not new logic; the failure modes worth knowing (empty-grade loop behavior, reducer accumulation) were already exercised and confirmed in Unit 15.
+- **Resume claim earned:** **"Built an agentic RAG pipeline in LangGraph with self-correcting retrieval — a relevance-grading node and bounded query-rewrite retries — serving live queries end-to-end."** Earned now, not before — this is the point the graph stopped being a side experiment and became the actual code path answering real HTTP requests.
+
+**Phase 6 complete.** Code track (relevance grader, query rewrite, conditional edge, bounded retry) built, wired into `/query`, and observed both on the happy path and under a forced failure that exercises the full retry-then-give-up behavior. Concept track (self-correction, bounded loops) written in `Interview_prep.md` §8; §7 updated to reflect the graph's final shape.
