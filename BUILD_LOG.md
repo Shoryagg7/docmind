@@ -155,3 +155,17 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Observed behavior:** `source: "sample"` now correctly resolves to `sample.pdf` and returns Maya Chen's answer, matching what previously required the full filename.
 - **Failure mode discovered:** none new — this fixes UX friction from an already-known, already-documented gotcha (Unit 11), doesn't change its underlying exact-match nature (a genuine typo still silently matches nothing).
 - **Resume claim earned:** none new — polish, not new capability.
+
+---
+
+## Unit 13 — 2-node LangGraph graph (retrieve → generate)
+
+- **Concept touched:** chains vs. graphs, state, reducers.
+- **Files changed:** `services/graph.py` (new), `requirements.txt` (added `langgraph==1.2.11`, pinned exactly per `CLAUDE.md`'s explicit rule since LangGraph's API changes frequently).
+- **Design decision:** no custom reducers — `retrieve` and `generate` write disjoint state keys, so LangGraph's default overwrite-per-key merge is sufficient for a linear 2-node graph. Not wired into the `/query` route yet; `services/rag.py`'s straight-line `answer_question()` stays the live implementation until Phase 6 gives the graph its actual new behavior (grade + rewrite + bounded retry).
+- **Test/command run:** manual side-by-side comparison against `answer_question()` on live data (no DB mutation) — same question, both implementations.
+- **Observed behavior:** identical correctness — same answer, same citation, and grounding held the same way through the graph path (out-of-context question → "I don't know", sources fell back to all retrieved chunks per the Unit 11 rule).
+- **Failure mode discovered:** none — this unit was about proving the mechanics work, not finding a bug.
+- **Resume claim earned:** none new yet — a graph that reproduces the old function's output isn't "agentic" anything. That's earned in Phase 6, once the graph actually grades, retries, and rewrites.
+
+**Phase 5 complete.** Code track (LangGraph rewrite) observed producing identical results to the pre-graph implementation; concept track (chains vs. graphs, state, reducers) written in `Interview_prep.md` §7.

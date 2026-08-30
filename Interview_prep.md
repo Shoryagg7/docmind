@@ -112,7 +112,35 @@ The single most dangerous failure mode I hit in this whole phase wasn't the inde
 
 ---
 
-## 5. Grounding and Citations via Prompt Construction
+## 5. Top-k Retrieval: Choosing k, and Filtered Vector Search
+
+**What it is**
+`k` is how many chunks a single retrieval call asks for — and it's a real trade-off dial, not a "bigger is safer" setting. It was proven directly, not just argued: with `k=3`, a query asking to list all projects on a resume returned only one, because the second project's chunk simply didn't rank in the top 3 — a **recall failure** (the right information existed in the corpus but never reached the LLM). Raising `k` to 6 fixed that, but the response then returned all 6 retrieved chunks as "sources" — most of them irrelevant (skills, extracurriculars) — a **precision problem** (too much noise reaching the LLM and the client). Those are two different failure modes, fixed two different ways: recall by raising `k`, precision by filtering the returned `sources` down to only the chunks the LLM actually cited in its answer. Raising `k` doesn't fix precision, and filtering citations doesn't fix recall — each needed its own fix.
+
+Separately, `search()` gained an optional equality filter: `WHERE source = :source`, combined in the same query with the existing `ORDER BY embedding <=> :query` ranking. This is document/metadata scoping — restricting the vector search to rows matching an exact structured condition before or alongside ranking by similarity. It's a very common real RAG pattern (often called "filtered vector search"), and it's exactly what stops one uploaded document's chunks from silently competing with another's for the same top-k slots.
+
+**Why we chose it**
+Requirement: answer "list all X" questions completely; keep citations honest (only show what was actually used); let a query be restricted to one uploaded document instead of the whole corpus.
+Choice: keep `k` as a per-query parameter (not hardcoded), default modest but overridable; filter `sources` post-generation to only cited chunk IDs; add an optional `source` equality filter alongside the existing similarity ordering.
+Benefit: each of the three real failures this project actually hit — missed enumeration, noisy citations, cross-document contamination — got fixed by its own small, targeted change, each provably working (verified with real multi-document uploads, not just unit tests).
+Cost: `k` is still a blunt instrument — raising it is not a real fix for enumeration at real scale (a corpus with hundreds of chunks and dozens of "project"-like items would need a fundamentally different retrieval strategy, not `k=50`). Document scoping requires the caller to already know the exact `source` string — no fuzzy matching, no automatic per-session isolation; get the string wrong and you silently search nothing (or everything, if omitted) rather than getting an error.
+
+**Soundbite**
+"`k` isn't a safety knob you just turn up — I hit both failure modes myself. `k=3` missed a second project because its chunk didn't rank in the top 3: a recall problem. Raising it to `k=6` fixed that but returned four irrelevant chunks as sources until I filtered citations down to only what the model actually referenced: a precision problem, fixed separately. Then I added document scoping — a plain equality filter on `source`, combined with the existing vector similarity ordering in the same query — because without it, two uploaded documents' chunks competed for the same slots, and I watched that produce a genuinely correct 'I don't know' when I asked an ambiguous question with both documents live."
+
+**The gotcha**
+Two indexes are doing two completely different jobs here, and conflating them is an easy interview slip. The B-tree index (`chunks_source_idx`) is built on the `source` column and answers "which rows exactly equal this value" — the ordinary, default index type for equality/range filtering, same job it does for a primary key. The HNSW index (`chunks_embedding_hnsw_idx`) is built on the `embedding` column and answers a completely different question — "which rows are approximately closest to this vector" — needing a graph structure, not a sorted tree. A single query can use both together (B-tree filters down to one document's rows, HNSW ranks the filtered set by similarity), but neither index can do the other's job, and mixing up "which key backs which index" is exactly the kind of detail an interviewer will probe.
+
+**Self-test**
+- Why does raising `k` fix a missed-item recall problem but not fix it "for real" at a much larger corpus size?
+- What's the practical difference between a recall problem and a precision problem in retrieval — and which one did each of DocMind's two real failures actually correspond to?
+- What column is the B-tree index built on, and what column is the HNSW index built on? Why can't either substitute for the other?
+- Why doesn't filtering the `sources` field change how many chunks were retrieved or how many tokens the LLM call cost?
+- If a corpus had 10 documents with 50 chunks each, what would have to change about the current retrieval design to reliably answer "list every project across all my documents" — is raising `k` a real answer here, and why or why not?
+
+---
+
+## 6. Grounding and Citations via Prompt Construction
 
 **What it is**
 Grounding means constraining an LLM's answer to only use information that was actually retrieved and handed to it in the prompt, instead of freely drawing on whatever it memorized during pretraining. There's no special API flag for this — it's done by instruction: the system prompt explicitly tells the model "answer only from the provided context; if the context doesn't contain the answer, say you don't know," and the retrieved chunks are pasted into the prompt, numbered, so the model can reference them. Citations are the model tagging each claim with which numbered chunk it came from (`[1]`, `[2]`), so a reader can trace an answer back to its source instead of trusting it blindly. Both are prompt-engineering techniques, not architectural guarantees — the model is *asked* to behave this way, not *forced* to.
@@ -139,28 +167,27 @@ Grounding failing doesn't look like an error — it looks like a plausible, conf
 
 ---
 
-## 6. Top-k Retrieval: Choosing k, and Filtered Vector Search
+## 7. Chains vs. Graphs, State, and Reducers
 
 **What it is**
-`k` is how many chunks a single retrieval call asks for — and it's a real trade-off dial, not a "bigger is safer" setting. It was proven directly, not just argued: with `k=3`, a query asking to list all projects on a resume returned only one, because the second project's chunk simply didn't rank in the top 3 — a **recall failure** (the right information existed in the corpus but never reached the LLM). Raising `k` to 6 fixed that, but the response then returned all 6 retrieved chunks as "sources" — most of them irrelevant (skills, extracurriculars) — a **precision problem** (too much noise reaching the LLM and the client). Those are two different failure modes, fixed two different ways: recall by raising `k`, precision by filtering the returned `sources` down to only the chunks the LLM actually cited in its answer. Raising `k` doesn't fix precision, and filtering citations doesn't fix recall — each needed its own fix.
-
-Separately, `search()` gained an optional equality filter: `WHERE source = :source`, combined in the same query with the existing `ORDER BY embedding <=> :query` ranking. This is document/metadata scoping — restricting the vector search to rows matching an exact structured condition before or alongside ranking by similarity. It's a very common real RAG pattern (often called "filtered vector search"), and it's exactly what stops one uploaded document's chunks from silently competing with another's for the same top-k slots.
+A chain is a fixed, linear pipeline: step A always runs, then step B, then it's done — no branching, no revisiting an earlier step. That's exactly what `services/rag.py`'s `answer_question()` was: retrieve, then generate, always in that order, no way to say "actually, go back and retrieve again with a better query." A graph generalizes this: nodes (functions) connected by edges, with **shared state** flowing between them, and — the actual point of switching — edges can be *conditional*, so a node's output can decide which node runs next, including looping back to an earlier node. In LangGraph specifically, state is a typed dict (`RAGState` here), and each node returns only the keys it wants to update; the framework merges that partial update into the full state before the next node runs.
 
 **Why we chose it**
-Requirement: answer "list all X" questions completely; keep citations honest (only show what was actually used); let a query be restricted to one uploaded document instead of the whole corpus.
-Choice: keep `k` as a per-query parameter (not hardcoded), default modest but overridable; filter `sources` post-generation to only cited chunk IDs; add an optional `source` equality filter alongside the existing similarity ordering.
-Benefit: each of the three real failures this project actually hit — missed enumeration, noisy citations, cross-document contamination — got fixed by its own small, targeted change, each provably working (verified with real multi-document uploads, not just unit tests).
-Cost: `k` is still a blunt instrument — raising it is not a real fix for enumeration at real scale (a corpus with hundreds of chunks and dozens of "project"-like items would need a fundamentally different retrieval strategy, not `k=50`). Document scoping requires the caller to already know the exact `source` string — no fuzzy matching, no automatic per-session isolation; get the string wrong and you silently search nothing (or everything, if omitted) rather than getting an error.
+Requirement: the naive RAG loop needs to eventually support retrying a bad first retrieval (Phase 6) — grading the retrieved chunks and, if they're weak, rewriting the query and trying again, bounded so it can't loop forever.
+Choice: rebuild the existing retrieve→generate flow as a LangGraph `StateGraph` first, with **zero new behavior** — same two steps, same order, same output — before adding the actual grading/retry logic in a separate phase.
+Benefit: this isolates "does the graph mechanism work" from "does the new self-correction logic work" — proven directly, by running the same question through both the old function and the new graph and getting matching answers and citations. If Phase 6 breaks something, it's provably not the graph plumbing's fault.
+Cost: a graph is real added complexity over a plain function call — more moving parts (state shape, node wiring, compilation) for something that, at this stage, does exactly what five lines of Python already did. That cost is only worth paying because Phase 6 needs the conditional-looping capability a chain structurally cannot express.
+Rejected alternative: skip straight to building the grading/retry logic *and* the graph structure in one step. Rejected because it's exactly the situation `CLAUDE.md` warns against — introducing a framework abstraction (LangGraph) at the same time as new logic (grading, rewriting) makes it impossible to tell, if something's wrong, whether the graph is misconfigured or the new logic is buggy.
 
 **Soundbite**
-"`k` isn't a safety knob you just turn up — I hit both failure modes myself. `k=3` missed a second project because its chunk didn't rank in the top 3: a recall problem. Raising it to `k=6` fixed that but returned four irrelevant chunks as sources until I filtered citations down to only what the model actually referenced: a precision problem, fixed separately. Then I added document scoping — a plain equality filter on `source`, combined with the existing vector similarity ordering in the same query — because without it, two uploaded documents' chunks competed for the same slots, and I watched that produce a genuinely correct 'I don't know' when I asked an ambiguous question with both documents live."
+"A chain is fixed — A then B then done. A graph adds state that flows between nodes and, more importantly, edges that can be conditional, so a node can decide to loop back instead of always moving forward. I didn't build the graph and the new retry logic at the same time — I rebuilt the *exact same* retrieve-then-generate flow as a 2-node graph first, with no new behavior, and proved it gives identical output to the plain function it replaced. That way, when Phase 6 adds the actual grading and retry loop, any bug I hit is provably in the new logic, not in the graph plumbing itself."
 
 **The gotcha**
-Two indexes are doing two completely different jobs here, and conflating them is an easy interview slip. The B-tree index (`chunks_source_idx`) is built on the `source` column and answers "which rows exactly equal this value" — the ordinary, default index type for equality/range filtering, same job it does for a primary key. The HNSW index (`chunks_embedding_hnsw_idx`) is built on the `embedding` column and answers a completely different question — "which rows are approximately closest to this vector" — needing a graph structure, not a sorted tree. A single query can use both together (B-tree filters down to one document's rows, HNSW ranks the filtered set by similarity), but neither index can do the other's job, and mixing up "which key backs which index" is exactly the kind of detail an interviewer will probe.
+LangGraph's default behavior when a node returns a state update is to *overwrite* whatever was there — last writer wins. That's invisible and harmless right now because `retrieve` and `generate` never touch the same key. It stops being harmless the moment a loop is introduced: a retry counter that's supposed to *accumulate* across iterations (1, 2, 3...) would just get reset to whatever the node returns each time, silently breaking the "bounded" part of "bounded retries," unless it's given an explicit reducer (e.g., `Annotated[int, operator.add]`) that tells LangGraph how to combine the old value with the new one instead of replacing it. This is exactly the kind of thing that looks fine in a 2-node graph and breaks the moment you add a loop — worth testing for explicitly once Phase 6 lands, not assuming it "just works" the same way.
 
 **Self-test**
-- Why does raising `k` fix a missed-item recall problem but not fix it "for real" at a much larger corpus size?
-- What's the practical difference between a recall problem and a precision problem in retrieval — and which one did each of DocMind's two real failures actually correspond to?
-- What column is the B-tree index built on, and what column is the HNSW index built on? Why can't either substitute for the other?
-- Why doesn't filtering the `sources` field change how many chunks were retrieved or how many tokens the LLM call cost?
-- If a corpus had 10 documents with 50 chunks each, what would have to change about the current retrieval design to reliably answer "list every project across all my documents" — is raising `k` a real answer here, and why or why not?
+- What can a graph express that a chain structurally cannot, and why does that matter for a self-correcting retrieval loop specifically?
+- What does a LangGraph node actually return, and what does the framework do with that return value?
+- Why does the default state-merge behavior (overwrite per key) work fine for `retrieve`→`generate` but fail silently once a retry loop is added?
+- What's a reducer, concretely, and what problem does `Annotated[int, operator.add]` solve that the default merge behavior doesn't?
+- Why was it worth building a graph with no new behavior first, instead of building the graph and the grading/retry logic together in one step?

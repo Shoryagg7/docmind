@@ -10,7 +10,7 @@ Agentic RAG document assistant. Built one small, observable unit at a time per `
 | 2 | Chunking strategy and trade-offs | PDF ingest, chunker | Done |
 | 3 | Vector indexes, HNSW vs exact | pgvector schema, top-k search | Done |
 | 4 | Prompting, grounding, citations | Naive RAG end-to-end | Done |
-| 5 | Chains vs graphs, state, reducers | LangGraph rewrite | Not started |
+| 5 | Chains vs graphs, state, reducers | LangGraph rewrite | Done |
 | 6 | Self-correction, bounded loops | Relevance grader + query rewrite | Not started |
 | 7 | Eval methodology, LLM-as-judge | 25-question golden set | Not started |
 | 8 | Cache semantics, TTL, thresholds | Redis semantic cache | Not started |
@@ -171,4 +171,22 @@ Found via real usage (developer uploaded their own resume) rather than planned w
 
 ## Remaining work (current phase)
 
-**Phase 4 complete**, including three real fixes found and made via actual usage rather than planned testing. Next: Phase 5 — LangGraph rewrite (chains vs. graphs, state, reducers), wrapping the retrieve→generate loop into an explicit graph — pending its own proposal/approval. Known open item for later: test/dev database separation (surfaced in Unit 11, not yet fixed).
+**Phase 4 complete**, including three real fixes found and made via actual usage rather than planned testing. Known open item for later: test/dev database separation (surfaced in Unit 11, not yet fixed).
+
+## Phase 5 — LangGraph rewrite
+
+### Unit 13 — 2-node LangGraph graph (retrieve → generate), functionally identical to Phase 4
+
+- **What:** `services/graph.py` — `RAGState` (TypedDict), a `retrieve` node and a `generate` node (logic ported from `services/rag.py`), wired `START → retrieve → generate → END` via `StateGraph`. `answer_question_graph(session, query, k, source)` builds and invokes the graph. Pinned `langgraph==1.2.11` exactly, per `CLAUDE.md`'s pinning rule.
+- **Why:** first unit of Phase 5 — prove the graph mechanics (state, node returns, compilation, `ainvoke`) work correctly with zero new behavior, before Phase 6 adds the grade/rewrite loop on top of a graph already known to work.
+- **Files changed:** `services/graph.py` (new), `requirements.txt` (added `langgraph==1.2.11`).
+- **Command used:** manual comparison script — ran the same question through both `answer_question()` (Unit 10/11's straight-line function) and `answer_question_graph()` against the same live data, no DB mutation.
+- **Observed result:** both produced the correct answer ("Maya Chen") with the correct citation; grounding held identically through the graph path (out-of-context question → "I don't know", sources fell back to all retrieved chunks per the Unit 11 fallback rule).
+- **Design decision:** no custom reducers defined — `retrieve` and `generate` write disjoint state keys, so LangGraph's default overwrite-on-write behavior is sufficient. This will need to change in Phase 6, when a retry loop needs to *accumulate* state (e.g., a retry counter) across loop iterations rather than overwrite it. Deliberately **not** wired into the `/query` route yet — this graph will still change shape in Phase 6 before it's the real implementation.
+- **Remaining work:** none for Phase 5 itself — its code track ("LangGraph rewrite") is exactly what Unit 13 delivers. The grade/rewrite nodes belong to Phase 6 ("Self-correction, bounded loops"), a separate phase.
+
+**Phase 5 complete.** Code track (LangGraph rewrite) observed producing identical results to the pre-graph implementation; concept track (chains vs. graphs, state, reducers) written in `Interview_prep.md` §7.
+
+## Remaining work (current phase)
+
+Phase 6 next: relevance-grading node + query-rewrite node + a conditional edge looping back to `retrieve` on a poor grade, bounded to prevent infinite retries — pending its own proposal/approval. This is where `services/graph.py` actually changes shape and needs its first custom reducer.
