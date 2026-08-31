@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DocMind</title>
+<style>
+  :root {
+    --bg: #eef1f5; --surface: #ffffff; --surface-2: #f7f9fb;
+    --ink: #182230; --ink-dim: #59677a; --ink-faint: #8996a6;
+    --rule: #c7d0db; --accent: #0e7c6b; --accent-ink: #0a5d50;
+    --accent-soft: #dcefeb; --warn: #9c6b1f; --warn-soft: #f3e6c8;
+    --err: #b5502b; --err-soft: #f4e1d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10151c; --surface: #171f29; --surface-2: #1d2631;
+      --ink: #e9edf2; --ink-dim: #8fa0b3; --ink-faint: #64758a;
+      --rule: #2c3948; --accent: #4bdfc9; --accent-ink: #8ff0e0;
+      --accent-soft: #163832; --warn: #e0ad4c; --warn-soft: #3a2f13;
+      --err: #e8935f; --err-soft: #3a2419;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.55;
+  }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .page { max-width: 940px; margin: 0 auto; padding: 36px 22px 90px; }
+
+  header { border-bottom: 1px solid var(--rule); padding-bottom: 16px; margin-bottom: 22px; }
+  .header-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 28px; letter-spacing: -0.01em; }
+  header p { margin: 6px 0 0; color: var(--ink-dim); font-size: 14px; max-width: 66ch; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 8px; padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 {
+    margin: 0 0 12px; font-size: 11.5px; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--ink-faint); font-weight: 600;
+  }
+
+  .row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+  input[type=text] {
+    flex: 1 1 300px; padding: 10px 12px; font-size: 15px;
+    border: 1px solid var(--rule); border-radius: 6px;
+    background: var(--surface-2); color: var(--ink);
+  }
+  input[type=text]:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 9px 18px; font-size: 14.5px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--accent); border-radius: 6px;
+    background: var(--accent); color: var(--surface); white-space: nowrap;
+  }
+  button.ghost { background: transparent; color: var(--ink-dim); border-color: var(--rule); font-weight: 500; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  select, input[type=number] {
+    padding: 9px 10px; font-size: 14px; border: 1px solid var(--rule);
+    border-radius: 6px; background: var(--surface-2); color: var(--ink);
+  }
+  input[type=number] { width: 68px; }
+  label.opt { font-size: 12.5px; color: var(--ink-dim); display: flex; align-items: center; gap: 6px; }
+  input[type=file] { font-size: 13px; color: var(--ink-dim); max-width: 100%; }
+
+  .docs { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
+  .doc {
+    font-family: "IBM Plex Mono", monospace; font-size: 11.5px; padding: 3px 9px;
+    border-radius: 4px; background: var(--surface-2);
+    border: 1px solid var(--rule); color: var(--ink-dim);
+  }
+
+  /* ---- chat ---- */
+  #chat { display: flex; flex-direction: column; gap: 16px; }
+  .turn { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); overflow: hidden; }
+  .turn__q {
+    padding: 12px 16px; background: var(--surface-2);
+    border-bottom: 1px solid var(--rule); font-weight: 600; font-size: 15px;
+    display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
+  }
+  .turn__scope { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-faint); font-weight: 400; white-space: nowrap; }
+  .turn__body { padding: 14px 16px; }
+  .turn__answer { font-size: 15.5px; white-space: pre-wrap; }
+  .turn__answer:empty::after { content: "▍"; color: var(--ink-faint); }
+
+  details.stages { margin-bottom: 12px; }
+  details.stages > summary {
+    cursor: pointer; font-size: 12px; color: var(--ink-faint);
+    font-family: "IBM Plex Mono", monospace; user-select: none;
+  }
+  .stage {
+    display: flex; gap: 10px; font-size: 12.5px; margin-top: 6px;
+    font-family: "IBM Plex Mono", monospace; padding: 5px 9px;
+    border-radius: 4px; background: var(--surface-2); border-left: 3px solid var(--accent);
+  }
+  .stage[data-stage=rewrite] { border-left-color: var(--warn); background: var(--warn-soft); }
+  .stage[data-stage=cache] { border-left-color: var(--ink-faint); }
+  .stage[data-stage=error] { border-left-color: var(--err); background: var(--err-soft); }
+  .stage__name { color: var(--accent-ink); min-width: 70px; }
+  .stage[data-stage=rewrite] .stage__name { color: var(--warn); }
+  .stage[data-stage=error] .stage__name { color: var(--err); }
+  .stage__detail { color: var(--ink-dim); }
+
+  .pills { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
+  .pill {
+    font-family: "IBM Plex Mono", monospace; font-size: 11.5px;
+    padding: 3px 9px; border-radius: 20px;
+    background: var(--surface-2); border: 1px solid var(--rule); color: var(--ink-dim);
+  }
+  .pill--hit { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+
+  details.sources { margin-top: 12px; }
+  details.sources > summary {
+    cursor: pointer; font-size: 12px; color: var(--ink-faint);
+    font-family: "IBM Plex Mono", monospace; user-select: none;
+  }
+  .source { border-top: 1px solid var(--rule); padding: 10px 0; font-size: 13px; color: var(--ink-dim); }
+  .source__id {
+    display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    padding: 1px 7px; border-radius: 3px; margin-right: 7px;
+    background: var(--accent-soft); color: var(--accent-ink);
+  }
+  .empty { color: var(--ink-faint); font-size: 14px; text-align: center; padding: 22px; }
+  .status { font-size: 13px; color: var(--ink-dim); margin-top: 8px; }
+  .status--err { color: var(--err); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="header-row">
+      <h1>DocMind</h1>
+      <button class="ghost" id="clear-chat" type="button">Clear chat</button>
+    </div>
+    <p>Agentic RAG over your PDFs — retrieval, self-grading, bounded retry, and a semantic cache.
+       Every stage shown is a real node transition from the LangGraph run.</p>
+  </header>
+
+  <div class="card">
+    <h2>Documents</h2>
+    <form class="row" id="upload-form">
+      <input type="file" id="file" accept="application/pdf" required>
+      <button type="submit" id="upload-btn">Upload PDF</button>
+      <button type="button" class="ghost" id="refresh-docs">Refresh</button>
+    </form>
+    <div class="status" id="upload-status"></div>
+    <div class="docs" id="docs"></div>
+  </div>
+
+  <div class="card">
+    <h2>Ask</h2>
+    <form id="form">
+      <div class="row">
+        <input type="text" id="question" placeholder="Ask something about your documents…"
+               value="What city does Maya Chen work in?" autocomplete="off">
+        <button type="submit" id="ask">Ask</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="opt">scope
+          <select id="source"><option value="">all documents</option></select>
+        </label>
+        <label class="opt">top-k
+          <input type="number" id="k" value="3" min="1" max="10">
+        </label>
+        <label class="opt">
+          <input type="checkbox" id="bypass-cache"> bypass cache
+        </label>
+      </div>
+    </form>
+  </div>
+
+  <div id="chat">
+    <div class="empty" id="empty">No questions yet — ask something above.</div>
+  </div>
+
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const chatEl = $('chat');
+
+// ---------- documents ----------
+async function loadDocs() {
+  try {
+    const res = await fetch('/documents');
+    const docs = await res.json();
+    const sel = $('source');
+    const keep = sel.value;
+    sel.innerHTML = '<option value="">all documents</option>';
+    $('docs').textContent = '';
+    for (const d of docs) {
+      const opt = document.createElement('option');
+      opt.value = d.source; opt.textContent = d.source;
+      sel.appendChild(opt);
+      const pill = document.createElement('span');
+      pill.className = 'doc';
+      pill.textContent = `${d.source} · ${d.chunks} chunks`;
+      $('docs').appendChild(pill);
+    }
+    if (keep) sel.value = keep;
+    if (!docs.length) $('docs').textContent = 'No documents ingested yet.';
+  } catch (err) {
+    $('docs').textContent = 'Could not load documents — is the server running?';
+  }
+}
+
+$('refresh-docs').addEventListener('click', loadDocs);
+
+$('upload-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const file = $('file').files[0];
+  if (!file) return;
+  const status = $('upload-status');
+  status.className = 'status';
+  status.textContent = `Uploading ${file.name}…`;
+  $('upload-btn').disabled = true;
+
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/documents', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) {
+      status.className = 'status status--err';
+      status.textContent = `Upload failed: ${data.detail || res.status}`;
+    } else {
+      status.textContent = `Ingested ${data.source} — ${data.chunks_stored} chunks stored.`;
+      await loadDocs();
+      $('source').value = data.source;
+    }
+  } catch (err) {
+    status.className = 'status status--err';
+    status.textContent = `Upload failed: ${err}`;
+  } finally {
+    $('upload-btn').disabled = false;
+  }
+});
+
+// ---------- chat ----------
+function newTurn(question, scope) {
+  $('empty')?.remove();
+  const turn = document.createElement('div');
+  turn.className = 'turn';
+  turn.innerHTML = `
+    <div class="turn__q"><span class="turn__q-text"></span><span class="turn__scope"></span></div>
+    <div class="turn__body">
+      <details class="stages" open><summary>pipeline</summary><div class="stages__list"></div></details>
+      <div class="turn__answer"></div>
+      <div class="pills"></div>
+      <details class="sources" hidden><summary>cited sources</summary><div class="sources__list"></div></details>
+    </div>`;
+  turn.querySelector('.turn__q-text').textContent = question;
+  turn.querySelector('.turn__scope').textContent = scope;
+  chatEl.appendChild(turn);
+  turn.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return turn;
+}
+
+function addStage(turn, stage, detail) {
+  const el = document.createElement('div');
+  el.className = 'stage';
+  el.dataset.stage = stage;
+  el.innerHTML = `<span class="stage__name"></span><span class="stage__detail"></span>`;
+  el.querySelector('.stage__name').textContent = stage;
+  el.querySelector('.stage__detail').textContent = detail;
+  turn.querySelector('.stages__list').appendChild(el);
+}
+
+function addPill(turn, text, hit) {
+  const el = document.createElement('span');
+  el.className = 'pill' + (hit ? ' pill--hit' : '');
+  el.textContent = text;
+  turn.querySelector('.pills').appendChild(el);
+}
+
+$('clear-chat').addEventListener('click', () => {
+  chatEl.innerHTML = '<div class="empty" id="empty">No questions yet — ask something above.</div>';
+});
+
+$('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const question = $('question').value.trim();
+  if (!question) return;
+
+  const source = $('source').value;
+  const turn = newTurn(question, source ? `scope: ${source}` : 'scope: all documents');
+  const answerEl = turn.querySelector('.turn__answer');
+  const stagesDetails = turn.querySelector('details.stages');
+  $('ask').disabled = true;
+
+  const started = performance.now();
+  const body = {
+    question,
+    source: source || null,
+    k: parseInt($('k').value, 10) || 3,
+    bypass_cache: $('bypass-cache').checked
+  };
+
+  try {
+    const res = await fetch('/query/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data:')) continue;
+        const evt = JSON.parse(line.slice(5));
+
+        if (evt.type === 'stage') {
+          addStage(turn, evt.stage, evt.detail);
+        } else if (evt.type === 'token') {
+          answerEl.textContent += evt.text;
+        } else if (evt.type === 'done') {
+          const elapsed = ((performance.now() - started) / 1000).toFixed(2);
+          addPill(turn, evt.cached ? 'semantic cache HIT' : 'cache miss', evt.cached);
+          addPill(turn, `${elapsed}s`);
+          addPill(turn, `${evt.llm_calls} LLM calls`);
+          addPill(turn, `${evt.tokens} tokens`);
+          stagesDetails.open = false;
+
+          if (evt.sources?.length) {
+            const box = turn.querySelector('details.sources');
+            box.hidden = false;
+            const list = turn.querySelector('.sources__list');
+            for (const s of evt.sources) {
+              const el = document.createElement('div');
+              el.className = 'source';
+              el.innerHTML = `<span class="source__id"></span><span class="mono source__doc"></span><div class="source__text"></div>`;
+              el.querySelector('.source__id').textContent = '[' + s.id + ']';
+              el.querySelector('.source__doc').textContent = s.source;
+              el.querySelector('.source__text').textContent = s.content;
+              list.appendChild(el);
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    if (location.protocol === 'file:') {
+      addStage(turn, 'error', 'Page opened from disk (file://) — it cannot reach the API. Open http://localhost:8001/ instead.');
+    } else {
+      addStage(turn, 'error', `Could not reach the API at ${location.origin}. Is the server running? (${err})`);
+    }
+  } finally {
+    $('ask').disabled = false;
+    $('question').select();
+  }
+});
+
+loadDocs();
+</script>
+</body>
+</html>

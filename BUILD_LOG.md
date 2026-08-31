@@ -318,3 +318,66 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Resume claim earned:** extends Unit 23 — **"...and mitigated it with a lexical negation guard on cache lookups, verified to block negated hits without regressing legitimate paraphrase hits, with the guard's own residual failure mode (semantic negation without lexical markers) measured rather than assumed."**
 
 **Phase 9 complete.** Code track (negation set, threshold analysis, negation guard) built and measured. Concept track (embedding failure modes) written in `Interview_prep.md` §11.
+
+---
+
+## Unit 25 — Token accounting (per-call logging + per-request totals)
+
+- **Concept touched:** token usage and cost accounting.
+- **Files changed:** `core/usage.py` (new), `services/llm_client.py` (records usage, accepts a `label`), `services/grader.py` / `services/graph.py` / `eval/judge.py` (labelled call sites), `schemas/query.py` (`tokens`, `llm_calls` on the response), `main.py` (logging config).
+- **Design decision — instrument the choke point, not the call sites.** Every Groq call in the system already routed through `services/llm_client.py::generate()`, so recording usage there captures 100% of spend with one edit — grading, rewriting, generation, and the eval judge included. Had LLM access been scattered across modules, this instrumentation would have been both invasive and unreliable. Second decision: per-request totals accumulate in a **`ContextVar`, not a module global** — FastAPI serves concurrent requests on one event loop, so a global counter would blend two users' usage together; a `ContextVar` isolates per request (and per task) automatically. Third: a `label` per call site, so the log attributes tokens to a *stage* rather than reporting an undifferentiated total.
+- **Test/command run:** server on 8001 with `redis-cli FLUSHALL`, one cold query then the same query again.
+- **Observed behavior:** cold query → `{'cached': False, 'tokens': 1221, 'llm_calls': 4}`; repeat → `{'cached': True, 'tokens': 0, 'llm_calls': 0}`. Server log attributes every call: three `label=grade` (276 + 289 + 292) and one `label=generate` (364), then `request cached=False llm_calls=4 tokens=1221 (0.61% of daily free-tier quota)`.
+- **Failure mode discovered — the cost of self-correction, finally quantified.** Grading consumes **857 of 1221 tokens (70%)** of a successful query, versus 364 (30%) for the answer itself. Phase 6's relevance grading more than doubles the token cost of every single query, because it fires once *per retrieved chunk* (k=3) — and on a retry path it would be 3 grades + rewrite + 3 grades + rewrite + 3 grades + generate = 11 calls. Derived from the measurement: ~**163 queries/day** on the free tier, and a 25-question eval run costs ~39,000 tokens including the judge, so ~**5 eval runs exhausts the daily quota** — which is almost exactly what happened during the Unit 23 chunk-size experiment. The quota wall hit earlier in the project was entirely predictable; there was simply no instrument to predict it with. This also retroactively justifies Phase 8: a cache hit costs 0 tokens, so caching is not a nicety here, it is the difference between ~163 and effectively unbounded repeat queries per day.
+- **Resume claim earned:** **"Instrumented per-call and per-request LLM token accounting through a single client choke point, attributing spend by pipeline stage — revealing that relevance grading consumed 70% of tokens per query and that the free-tier quota allowed only ~163 queries or ~5 evaluation runs per day."**
+
+---
+
+## Unit 26 — SSE streaming + static UI
+
+- **Concept touched:** streaming (SSE), and surfacing agent stages as observable events.
+- **Files changed:** `services/llm_client.py` (`generate_stream()`), `services/graph.py` (`defer_generation` state flag, plus `initial_state()`, `build_context()`, `filter_cited()` extracted for reuse), `routers/stream.py` (new: `POST /query/stream`), `static/index.html` (new), `main.py` (mounts static, serves the page at `/`).
+- **Design decision — reuse the graph instead of duplicating it.** Streaming needs the *final* generation call to stream token-by-token, but the graph's `generate_node` returns a completed string. Rather than reimplement retrieve/grade/rewrite in the SSE route (duplication that would drift), added a `defer_generation` flag to `RAGState`: when set, `generate_node` stops before calling the LLM and leaves the graded chunks in state, and the route streams generation itself. The retry loop, grading, and bounded retries all still run through the real graph. Second decision: **stage events are emitted from `graph.astream()`, so they are the graph's actual node transitions, not a scripted animation** — a rewrite retry genuinely appears as a `rewrite` stage in the UI because the graph took that edge.
+- **Test/command run:** `redis-cli FLUSHALL`, then `curl -sN` against `/query/stream` cold and again cached; `curl` on `/` for the page.
+- **Observed behavior:** cold → stage events (`cache miss` → `retrieved 3 chunks` → `graded — 1 relevant` → `generating`), then **12 individual token events** (`'M'`, `'aya'`, `' Chen'`, `' works'`, `' in'`, `' Toronto'`, …), then `done cached=False calls=4 tokens=1246 sources=1`. Cached → single `cache hit` stage, whole answer in one event, `calls=0 tokens=0`. Page serves 200, 8.4KB.
+- **Failure modes discovered:** three real ones, all fixed. (1) `graph.astream()` yields **`None`**, not `{}`, for a node that changes no state — which `generate_node` does when deferring — crashing on `**update`; fixed by normalizing to `{}`. (2) The installed Groq SDK rejects `stream_options={"include_usage": True}` (`TypeError`), which is the documented OpenAI-compatible way to get usage on a stream; probing the actual chunk objects showed **Groq attaches `usage` to the final chunk automatically**, so the parameter was simply removed. Another instance of the Unit 2 lesson — verify SDK behaviour against the installed version rather than assuming API compatibility. (3) `pkill -f "uvicorn main:app"` repeatedly killed its own shell, because the same command string also contained the launch line; switched to `fuser -k 8001/tcp`.
+- **Resume claim earned:** **"Streamed answers token-by-token over SSE while surfacing each agent stage (retrieve, grade, rewrite, generate) as a live event from the LangGraph execution itself, with per-request token cost and cache status shown in a single-page UI."**
+
+---
+
+## Unit 27 — Query normalization before embedding (found by real UI use)
+
+- **Concept touched:** cache key normalization, applied before the embedding step rather than to a literal key.
+- **Files changed:** `services/semantic_cache.py` (`normalize_question()`, applied in `_entry_key()`, `get_cached_answer()`, and `set_cached_answer()`).
+- **How it was found:** not by a test. The developer used the new UI and typed *"Which city is Maya Chen based in"* — **without a question mark** — and got a cache miss on a paraphrase that had previously been measured as a hit. A test script pasting exact strings would never have surfaced this; it took a human typing naturally.
+- **Design decision:** normalize (casefold, collapse whitespace, strip trailing punctuation) and embed the *normalized* form, while continuing to store the original question text for display and for the negation guard. Normalization is applied at the embedding and key-digest steps only — the stored question stays human-readable.
+- **Test/command run:** similarity comparison before/after normalization across 6 variants; end-to-end cache probes; the Unit 21 suite re-run as a regression check.
+- **Observed behavior:** the missing question mark alone was worth **0.065 of similarity** — 0.9399 with it, **0.8754** without — which is nearly the entire 0.068 window between a true paraphrase and a different-answer question. For scale: the dangerous "born in" near-miss scores **0.8718**, so an unpunctuated *correct* paraphrase (0.8754) landed within **0.0036** of a question with a genuinely different answer. Punctuation moved the embedding about as much as changing the meaning did. After normalization, all three paraphrase variants (with `?`, without `?`, lowercased) collapse to an **identical 0.9654**, and every Unit 21 case still passes.
+- **Failure mode discovered / unexpected benefit:** normalization did not merely fix the miss, it **widened the safety margin**. Before: paraphrase 0.9399 vs danger 0.8718 = a 0.068 gap. After: 0.9654 vs 0.8693 = a **0.096** gap, ~41% wider. Removing a source of variance that was irrelevant to meaning made the meaningful signal easier to separate — the threshold is more robust than before, not merely better centred.
+- **Resume claim earned:** extends Unit 21 — **"...with query normalization before embedding, after measuring that a single trailing question mark shifted similarity by 0.065 (enough to flip a correct cache hit into a miss) and that normalizing widened the safe threshold window by ~41%."**
+
+---
+
+## Unit 28 — Full UI: upload, chat history, and query controls
+
+- **Concept touched:** none new — this makes the existing pipeline operable and demonstrable end-to-end.
+- **Files changed:** `routers/documents.py` (added `GET /documents`), `schemas/document.py` (`DocumentSummary`), `schemas/query.py` (`bypass_cache`), `routers/stream.py` (honours `bypass_cache`, distinct stage label), `static/index.html` (rewritten).
+- **Design decision:** the document dropdown is populated from a real `GET /documents` endpoint (source + chunk count via `GROUP BY`) rather than hardcoded, so uploads immediately become selectable and the page reflects actual database state. Added a `bypass_cache` flag because the cache made the pipeline *undemonstrable* — after one query everything returned instantly from cache, so showing streaming repeatedly required manually flushing Redis. Chat turns are self-contained (own stage trace, answer, sources, cost pills) so several queries can be compared side by side in one view, with stage traces auto-collapsing once an answer completes.
+- **Test/command run:** `GET /documents`; `POST /documents` with `-F "file=@..."` matching the UI's multipart shape; `POST /query/stream` with `bypass_cache:true`; page load; then `pytest`.
+- **Observed behavior:** `GET /documents` → `[{sample2.pdf, 4}, {sample.pdf, 5}]`. Upload of a test PDF → `{"source": "uitest.pdf", "chunks_stored": 4}`, immediately listed. `bypass_cache:true` → `"Cache bypassed — running pipeline"` and a full pipeline run. Page serves 200 at 14.4KB. Full suite **20/20 passed**.
+- **Failure mode discovered:** running `pytest` left a `test-fixture` document (3 chunks) visible in the UI's document list alongside the real fixtures — the shared test/dev database issue from Unit 11, now *visibly* leaking into the product surface rather than only affecting manual testing. Cleaned up manually; documented in the README's known limitations.
+- **Resume claim earned:** none new — this makes existing claims demonstrable rather than adding capability.
+
+---
+
+## Unit 29 — Portfolio polish (README, cleanup)
+
+- **Concept touched:** none — packaging.
+- **Files changed:** `README.md` (new), `.env.example` (added `REDIS_URL`, which had been missing since Unit 19).
+- **Design decision:** the README leads with **measured findings**, not a feature list — grading = 70% of tokens, 0.01s vs 9.62s cache hit, 25/25 golden set, 25→18 on the chunk-size experiment, 0.87 negation similarity, 0.065 for a question mark. Two findings are given their own section because they are the project's strongest talking points: that negation defeats similarity thresholds *by construction*, and that a cache hit bypasses every safety mechanism. A **Known limitations** section states six real weaknesses explicitly (semantic negation, silent cache errors, shared test/dev DB, unverified citations, single-user, quota ceiling) — a portfolio project claiming no weaknesses reads as either dishonest or unexamined.
+- **Test/command run:** `.venv/bin/python -m pytest -q`; fixture re-ingest; `test-fixture` cleanup; `redis-cli FLUSHALL` for a clean demo state.
+- **Observed behavior:** 20/20 tests pass; database holds exactly the two demo documents (9 chunks); cache empty and ready to demonstrate a cold→warm transition.
+- **Failure mode discovered:** none new.
+- **Resume claim earned:** none — packaging, not capability.
+
+**Phase 11 complete.** All 11 phases built, observed, and documented.

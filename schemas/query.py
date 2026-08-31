@@ -5,6 +5,7 @@ class QueryRequest(BaseModel):
     question: str
     k: int = 3
     source: str | None = None
+    bypass_cache: bool = False
 
     @field_validator("source")
     @classmethod
@@ -24,3 +25,5 @@ class QueryResponse(BaseModel):
     answer: str
     sources: list[Source]
     cached: bool = False
+    tokens: int = 0
+    llm_calls: int = 0

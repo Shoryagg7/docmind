@@ -46,8 +46,22 @@ def has_negation(text: str) -> bool:
     return _NEGATION_RE.search(text) is not None
 
 
+def normalize_question(question: str) -> str:
+    """Canonical form used for embedding and keying, not for display.
+
+    Measured motivation: a single trailing "?" moved similarity by 0.065 — nearly
+    the entire 0.068 window between a true paraphrase and a different-answer
+    question — so an unpunctuated paraphrase missed the cache while a punctuated
+    one hit it. Normalizing before embedding removes that source of variance.
+    """
+    text = question.strip().casefold()
+    text = re.sub(r"\s+", " ", text)
+    return text.rstrip("?!.,;: ")
+
+
 def _entry_key(question: str, source: str | None) -> str:
-    digest = hashlib.sha256(f"{source or NO_SOURCE}:{question}".encode()).hexdigest()
+    normalized = normalize_question(question)
+    digest = hashlib.sha256(f"{source or NO_SOURCE}:{normalized}".encode()).hexdigest()
     return f"{KEY_PREFIX}{digest}"
 
 
@@ -86,7 +100,8 @@ async def get_cached_answer(question: str, source: str | None = None) -> dict | 
             .dialect(2)
         )
         result = await client.ft(INDEX_NAME).search(
-            query, query_params={"vec": _to_bytes(embed_text(question))}
+            query,
+            query_params={"vec": _to_bytes(embed_text(normalize_question(question)))},
         )
     except RedisError:
         return None
@@ -122,7 +137,7 @@ async def set_cached_answer(question: str, answer: dict, source: str | None = No
                 "question": question,
                 "source": source or NO_SOURCE,
                 "answer": json.dumps(answer),
-                "embedding": _to_bytes(embed_text(question)),
+                "embedding": _to_bytes(embed_text(normalize_question(question))),
             },
         )
         await client.expire(key, CACHE_TTL_SECONDS)

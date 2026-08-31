@@ -12,7 +12,7 @@ def grade_relevance(query: str, chunk_content: str) -> bool:
         f"Excerpt: {chunk_content}\n\n"
         "Is this excerpt relevant to answering the question?"
     )
-    verdict = generate(prompt, system=GRADER_SYSTEM_PROMPT)
+    verdict = generate(prompt, system=GRADER_SYSTEM_PROMPT, label="grade")
     return verdict.strip().lower().startswith("yes")
 
 

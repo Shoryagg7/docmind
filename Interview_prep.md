@@ -334,3 +334,34 @@ The impossibility result is the thing to remember, because "just raise the thres
 - Negation is survivable at the retrieval layer but not at the cache layer. Why? What's structurally different about the two?
 - The lexical negation guard has a false-positive mode and a false-negative mode. Which one is dangerous, which is merely wasteful, and why is it correct to prefer the wasteful one?
 - What would an actual fix (not a mitigation) require, and what does it cost you that the current guard doesn't?
+
+---
+
+## 12. Streaming (SSE) and Token/Cost Accounting
+
+**What it is**
+An LLM generates tokens sequentially, so the full answer only exists after the last one. Waiting for it means the user stares at nothing for the whole generation. **Streaming** sends each token as it's produced, so text appears progressively — the total time is unchanged, but *perceived* latency collapses because feedback starts almost immediately. **Server-Sent Events (SSE)** is the transport: a long-lived HTTP response with `Content-Type: text/event-stream`, where the server writes `data: {...}\n\n` frames and the client reads them off the response body as they arrive. It's one-directional (server → client), which is exactly what an answer stream needs — no WebSocket handshake or bidirectional machinery required. **Token accounting** is the other half: every LLM call reports how many tokens it consumed, and recording that per call and per request turns cost from an invisible surprise into a number you can see before it becomes a rate-limit error.
+
+**Where it lives**
+`services/llm_client.py::generate_stream()` — yields text chunks from Groq. `routers/stream.py` — `POST /query/stream`, emitting three event types: `stage` (pipeline progress), `token` (answer text), `done` (sources, token count, cache status). `core/usage.py` — per-call logging plus a `ContextVar`-scoped per-request accumulator. `static/index.html` — consumes the stream with `fetch` + `ReadableStream`.
+
+**Why we chose it**
+Requirement: a cold query takes ~10 seconds and does invisible work (retrieval, grading, possible retries) — the user should see progress, and the developer should see cost.
+Choice: SSE with three event types, generation streamed token-by-token, and usage recorded at the single LLM client choke point.
+Benefit: two things fell out of it. First, the **stage events come from `graph.astream()`**, so the UI shows genuine LangGraph node transitions — when a bounded retry fires, a `rewrite` stage genuinely appears because the graph took that edge; it isn't a scripted animation. Second, instrumenting the one function every LLM call already routes through captured **100% of spend with a single edit**, which immediately revealed that relevance grading consumes **857 of 1221 tokens (70%)** per query versus 364 for the answer itself.
+Cost: streaming complicates the response contract — errors that occur mid-stream can't become an HTTP status code, because a 200 was already sent. Also, a streamed response can't be a plain Pydantic model, so `/query` (JSON) and `/query/stream` (SSE) now coexist and must be kept consistent.
+Rejected alternative: WebSockets. Rejected because the payload is strictly one-directional, and SSE runs over ordinary HTTP with no upgrade handshake, no extra dependency, and automatic reconnection semantics. Also rejected: streaming the *whole pipeline* through the LLM client — retrieval and grading aren't token streams, so they're better modelled as discrete stage events than as text.
+
+**Soundbite**
+"A cold query takes about ten seconds, and most of that is invisible work — retrieval, grading each chunk, sometimes a retry. So I stream over SSE with three event types: stage events, answer tokens, and a final event with sources and cost. The stage events come straight out of LangGraph's `astream`, so what you see is the graph's actual node transitions — if the bounded retry fires, you watch a `rewrite` stage appear, because the graph really took that edge. On the cost side, every LLM call in the system already went through one client function, so instrumenting that one place captured everything. That's how I found that relevance grading was 70% of my token spend per query — three grading calls versus one generation call — and that the free tier only allowed about 163 queries a day."
+
+**The gotcha**
+Once you've sent the first byte of a streaming response, **you've already committed to HTTP 200** — an exception thrown mid-stream cannot become a 500, so failures have to be modelled as events *inside* the stream, or the client just sees a truncated response and can't distinguish it from a finished one. Second gotcha, learned the hard way here: `stream_options={"include_usage": True}` — the documented OpenAI-compatible way to get token counts on a stream — raised a `TypeError` on the installed Groq SDK; probing the actual chunk objects showed Groq attaches `usage` to the final chunk automatically. The general lesson repeats from the model-deprecation incident in Phase 1: verify SDK behaviour against the installed version rather than assuming API compatibility. Third: per-request token totals must be stored in a **`ContextVar`, not a module-level global** — FastAPI serves concurrent requests on a single event loop, so a global counter silently blends two users' usage together, producing numbers that look plausible and are wrong.
+
+**Self-test**
+- What does streaming actually improve, given total generation time is unchanged?
+- Why SSE rather than WebSockets for this specific payload?
+- You're 3 seconds into a streamed response and retrieval throws. Why can't you return a 500, and what should you do instead?
+- Why does instrumenting `generate()` capture 100% of token spend, and what property of the earlier design made that possible?
+- Why is a module-level counter wrong for per-request token totals in FastAPI, and what does `ContextVar` do differently?
+- Grading is 70% of per-query tokens. Given that number, argue both for and against keeping the relevance-grading step.

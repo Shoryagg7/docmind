@@ -15,8 +15,8 @@ Agentic RAG document assistant. Built one small, observable unit at a time per `
 | 7 | Eval methodology, LLM-as-judge | 25-question golden set | Done |
 | 8 | Cache semantics, TTL, thresholds | Redis semantic cache | Done |
 | 9 | Embedding failure modes | Negation set + threshold tuning | Done |
-| 10 | Streaming, token/cost accounting | SSE, UI, logging | Not started |
-| 11 | Portfolio polish | README, demo, cleanup | Not started |
+| 10 | Streaming, token/cost accounting | SSE, UI, logging | Done |
+| 11 | Portfolio polish | README, demo, cleanup | Done |
 
 A phase is done only after its behavior has been observed and explained, not merely coded.
 
@@ -334,4 +334,62 @@ Found via real usage (developer uploaded their own resume) rather than planned w
 
 **Earned claim:** "Built a negation test set demonstrating that embedding similarity cannot distinguish a statement from its opposite (0.87 avg vs 0.47 for genuinely different text), showed this defeats similarity-threshold semantic caching by construction, and mitigated it with a lexical negation guard — with the guard's own residual failure mode measured rather than assumed."
 
-Phase 10 next: SSE streaming, static HTML page, token/cost logging — pending its own proposal/approval.
+## Phase 10 — Streaming, UI, token/cost accounting
+
+### Unit 25 — Token accounting
+
+- **What:** `core/usage.py` (per-call logging + `ContextVar`-based per-request totals), usage recorded inside `llm_client.generate()`, every call site labelled (`grade` / `rewrite` / `generate` / `judge`), `tokens` and `llm_calls` returned on `QueryResponse`.
+- **Why:** the quota wall hit during Phase 7/9 was invisible — this is the instrument that makes spend observable before it becomes a 429.
+- **Files changed:** `core/usage.py`, `services/llm_client.py`, `services/grader.py`, `services/graph.py`, `eval/judge.py`, `schemas/query.py`, `main.py`.
+- **Command used:** server on 8001, `redis-cli FLUSHALL`, one cold query then a repeat.
+- **Observed result:** cold → `tokens: 1221, llm_calls: 4`; repeat (cache hit) → `tokens: 0, llm_calls: 0`. Log attributes each call: 3 × `grade` (276/289/292) + 1 × `generate` (364), then a per-request total with `0.61% of daily free-tier quota`.
+- **Design decision:** instrument the single client choke point rather than each call site (captures 100% of spend with one edit); `ContextVar` rather than a module global, since FastAPI serves concurrent requests on one event loop and a global would blend users' usage together.
+- **Failure mode / finding:** **grading is 70% of token cost** (857 of 1221) versus 30% for the actual answer, because it fires once per retrieved chunk. Derived: ~163 queries/day on the free tier; a 25-question eval run ≈ 39,000 tokens; ~5 eval runs exhausts the quota — matching exactly what happened during the chunk-size experiment. Also retroactively justifies Phase 8, since a cache hit costs 0 tokens.
+- **Remaining work:** SSE streaming endpoint, then the static HTML page.
+
+### Unit 26 — SSE streaming + static UI
+
+- **What:** `generate_stream()` in `llm_client.py`; `defer_generation` flag on `RAGState` so the graph runs retrieve/grade/rewrite but stops before generating; `POST /query/stream` emitting SSE stage + token + done events; `static/index.html` served at `/`.
+- **Why:** makes the whole agentic pipeline visible in one place — the payoff demo for the project.
+- **Files changed:** `services/llm_client.py`, `services/graph.py`, `routers/stream.py`, `static/index.html`, `main.py`.
+- **Command used:** `redis-cli FLUSHALL`; `curl -sN` against `/query/stream` cold then cached; `curl /`.
+- **Observed result:** cold → stage events (cache miss → retrieved 3 chunks → graded 1 relevant → generating) then **12 separate token events**, then `done calls=4 tokens=1246`. Cached → one `cache hit` stage, `calls=0 tokens=0`. Page serves 200.
+- **Design decision:** reuse the graph rather than reimplement it — `defer_generation` lets the route stream the final call while retrieval, grading and bounded retry still run through the real graph. Stage events come from `graph.astream()`, so they are actual node transitions, not a scripted animation.
+- **Failure modes discovered:** (1) `astream()` yields `None` (not `{}`) for a node that changes no state → crash on `**update`. (2) Installed Groq SDK rejects `stream_options` — probing showed usage is attached to the final chunk automatically. (3) `pkill -f "uvicorn main:app"` kills its own shell when the same command also contains the launch line; use `fuser -k 8001/tcp`.
+
+### Unit 27 — Query normalization before embedding
+
+- **What:** `normalize_question()` in `services/semantic_cache.py` (casefold, collapse whitespace, strip trailing punctuation), applied at the embedding and key-digest steps; the original question text is still stored for display and the negation guard.
+- **Why:** found by real UI use — typing *"Which city is Maya Chen based in"* without a question mark missed a paraphrase that had previously measured as a hit.
+- **Files changed:** `services/semantic_cache.py`.
+- **Command used:** before/after similarity comparison across 6 variants; end-to-end cache probes; Unit 21 suite as regression check.
+- **Observed result:** the trailing `?` alone was worth **0.065** (0.9399 → 0.8754) — nearly the whole 0.068 safe window, and within 0.0036 of the dangerous "born in" score of 0.8718. After normalization all three paraphrase variants collapse to an identical **0.9654**; all Unit 21 cases still pass.
+- **Unexpected benefit:** the safe window **widened ~41%** (0.068 → 0.096), because removing variance irrelevant to meaning made the meaningful signal easier to separate.
+
+### Unit 28 — Full UI: upload, chat history, query controls
+
+- **What:** `GET /documents` endpoint; UI rebuilt with PDF upload, persistent chat turns, a document list driven by real DB state, a top-k control, and a `bypass_cache` flag.
+- **Why:** the pipeline was built but not operable — no upload path in the UI, and after one query the cache made streaming undemonstrable.
+- **Files changed:** `routers/documents.py`, `routers/stream.py`, `schemas/document.py`, `schemas/query.py`, `static/index.html`.
+- **Command used:** `GET /documents`; upload via `-F "file=@..."`; `/query/stream` with `bypass_cache:true`; `pytest`.
+- **Observed result:** documents list correct; upload → `{"source":"uitest.pdf","chunks_stored":4}` and immediately selectable; bypass flag produces a full pipeline run; 20/20 tests pass.
+- **Failure mode discovered:** `pytest` left a `test-fixture` document visible in the UI's document list — the Unit 11 shared test/dev database issue now leaking into the product surface, not just manual testing.
+
+### Unit 29 — Portfolio polish
+
+- **What:** `README.md`; `REDIS_URL` added to `.env.example` (missing since Unit 19); test-pollution cleanup; cache flushed to a clean demo state.
+- **Why:** Phase 11 — make the project legible to someone arriving cold.
+- **Files changed:** `README.md`, `.env.example`.
+- **Command used:** `pytest -q`; fixture re-ingest; `DELETE FROM chunks WHERE source='test-fixture'`; `redis-cli FLUSHALL`.
+- **Observed result:** 20/20 tests pass; DB holds exactly the two demo documents (9 chunks); cache empty.
+- **Design decision:** README leads with measured findings rather than a feature list, and states six known limitations explicitly — a portfolio project claiming no weaknesses reads as unexamined.
+
+## Remaining work
+
+**All 11 phases complete.** Code track and concept track both finished; `Interview_prep.md` has 12 sections covering every major concept, each with a decision, trade-off, gotcha, and self-test.
+
+Optional future work (all deliberately out of the locked scope): separate test database, cache-error observability, citation verification, reranking or hybrid BM25/vector search, multi-user auth, deployment.
+
+**Earned claims:** token accounting through a single choke point (grading = 70% of per-query tokens; ~163 queries/day on free tier); SSE streaming with live agent-stage events and per-request cost surfaced in the UI.
+
+Phase 11 next: portfolio polish — README, demo, cleanup — pending its own proposal/approval.
