@@ -8,6 +8,7 @@ from core.models import Chunk
 from services.grader import grade_relevance
 from services.llm_client import generate
 from services.rag import CITATION_PATTERN, SYSTEM_PROMPT
+from services.semantic_cache import get_cached_answer, set_cached_answer
 from services.vector_store import search
 
 MAX_RETRIES = 2
@@ -99,3 +100,15 @@ async def answer_question_graph(
         }
     )
     return {"answer": result["answer"], "sources": result["sources"]}
+
+
+async def answer_question_cached(
+    session: AsyncSession, query: str, k: int = 3, source: str | None = None
+) -> dict:
+    cached = await get_cached_answer(query, source=source)
+    if cached is not None:
+        return {**cached, "cached": True}
+
+    result = await answer_question_graph(session, query, k=k, source=source)
+    await set_cached_answer(query, result, source=source)
+    return {**result, "cached": False}

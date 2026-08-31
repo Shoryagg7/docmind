@@ -272,3 +272,34 @@ An eval is only as trustworthy as its reference answers, and nothing enforces th
 - What are the two different, legitimate reasons a question in this golden set should return "I don't know," and why does testing more than one of them matter?
 - LLM-as-judge is itself an LLM call — what's the specific risk that introduces, and what would a degenerate (always-correct or always-incorrect) judge look like from the outside?
 - Why was the eval harness built and proven on 3 questions before writing all 25, instead of writing all 25 first?
+
+---
+
+## 10. Semantic Caching: Similarity Thresholds and TTL
+
+**What it is**
+An ordinary cache keys on an exact value — the raw question string — so it only ever hits when someone submits character-identical text. That almost never happens with natural language: *"What city does Maya Chen work in?"* and *"Which city is Maya Chen based in?"* are the same question to any human and completely different strings to a hash map. A **semantic cache** replaces the exact key with the question's **embedding**, and replaces "equal" with "close enough": embed the incoming question, vector-search previously answered questions, and if the nearest one clears a cosine-similarity threshold, return its stored answer instead of re-running the pipeline. The threshold is the entire design — it's the definition of "the same question."
+
+**Where it lives**
+`services/cache.py` — the deliberately naive exact-key version, kept as the strawman. `services/semantic_cache.py` — the real one: entries stored as Redis hashes (question, `source` TAG, answer JSON, 384-dim FLOAT32 embedding) behind a RediSearch `FLAT` cosine index, with `SIMILARITY_THRESHOLD = 0.92` and a 1-hour TTL. `services/graph.py::answer_question_cached()` is the cache-aside wrapper that `routers/query.py` actually calls.
+
+**Why we chose it**
+Requirement: repeated and rephrased questions shouldn't re-run a pipeline that costs 3+ Groq calls and ~10 seconds — a need discovered concretely, by exhausting a 200,000-token daily quota during eval iteration.
+Choice: semantic cache keyed on question embedding, threshold `0.92`, scoped by `source`, wired cache-aside outside the graph.
+Benefit: measured end-to-end over HTTP — a cold question took **9.62s**; the identical question then took **0.01s**; and a *paraphrase never asked before* also took **0.01s** with the correct answer. That's ~960× faster and zero LLM calls, on a query the exact-match cache missed entirely.
+Cost: a cache hit bypasses **everything** — retrieval, relevance grading, grounded generation. Every safety mechanism built in Phases 4 and 6 sits *behind* the cache, so the cache is the one component in the pipeline with nothing downstream to catch its mistakes.
+Rejected alternative: caching the retrieved *chunks* instead of the final answer, then always re-running generation. Safer (a slightly-wrong chunk set still gets re-grounded by the LLM) but it only saves the retrieval call — not the 3+ Groq calls that are the actual cost. Also rejected: exact-key caching, built first specifically to watch it miss the paraphrase.
+
+**Soundbite**
+"A normal cache keys on the exact string, which is useless for natural language — nobody retypes a question character-for-character. So I keyed on the embedding instead and used a cosine-similarity threshold to decide what counts as the same question. The part I'd want to talk about is how I picked the threshold: I didn't guess it. I measured the similarities in my own data and found a true paraphrase scored 0.94, but *'what city does she work in'* versus *'what city was she born in'* scored 0.87 — nearly as close, with different correct answers, Toronto versus Vancouver. So the safe window was only about 0.07 wide, and I set 0.92 biased toward the strict end, because missing the cache just costs latency while a false hit serves a confidently wrong answer."
+
+**The gotcha**
+The threshold's failure is **asymmetric**, and the dangerous direction is silent. Too strict and you just miss — you do the normal work and the user gets a correct answer, slower. Too loose and you serve a wrong answer instantly, with a citation attached, and no LLM anywhere in the path to notice. Demonstrated directly: dropping the threshold from 0.92 to 0.85 made *"What city was Maya Chen **born** in?"* return the cached *"Maya Chen works in Toronto"*. The second-order gotcha is why that window is so narrow — embeddings cluster on **topic**, not on which fact is being requested. A completely different question about the same person (*"What university did Maya Chen graduate from?"*) still scored 0.80 against the original. So "semantically similar" and "has the same answer" are genuinely different properties, and a semantic cache is betting that they coincide. TTL is the crude backstop for the rest: entries expire after an hour, so a wrong or stale cached answer has a bounded lifetime rather than living forever.
+
+**Self-test**
+- Why is keying a cache on the raw question string not merely less effective, but actively negative-value in real traffic?
+- Your paraphrase scores 0.94 and a different-answer question scores 0.87. What threshold do you pick, and why is picking the exact midpoint *not* obviously the right call?
+- What does a cache hit skip, and why does that make the similarity threshold a correctness parameter rather than a performance one?
+- Two questions about the same person, asking about completely different facts, score 0.80 similarity. What does that tell you about what embeddings actually encode, and what does it imply for a semantic cache in a corpus that's all about one entity?
+- Why does `eval/run_eval.py` deliberately bypass the cache and call the graph directly? What would the eval report if it didn't?
+- What is TTL actually protecting you from here, and what does it *not* protect you from?

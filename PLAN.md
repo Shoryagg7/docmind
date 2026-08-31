@@ -13,7 +13,7 @@ Agentic RAG document assistant. Built one small, observable unit at a time per `
 | 5 | Chains vs graphs, state, reducers | LangGraph rewrite | Done |
 | 6 | Self-correction, bounded loops | Relevance grader + query rewrite | Done |
 | 7 | Eval methodology, LLM-as-judge | 25-question golden set | Done |
-| 8 | Cache semantics, TTL, thresholds | Redis semantic cache | In progress |
+| 8 | Cache semantics, TTL, thresholds | Redis semantic cache | Done |
 | 9 | Embedding failure modes | Negation set + threshold tuning | Not started |
 | 10 | Streaming, token/cost accounting | SSE, UI, logging | Not started |
 | 11 | Portfolio polish | README, demo, cleanup | Not started |
@@ -275,6 +275,31 @@ Found via real usage (developer uploaded their own resume) rather than planned w
 - **Design decision:** cache key includes `source` so one document's cached answer can never serve another's query. Fresh client per call rather than a cached singleton, deliberately avoiding the cross-event-loop reuse bug hit in Unit 8.
 - **Remaining work:** replace the exact key with an embedding + similarity threshold so the paraphrase hits.
 
+### Unit 21 — Semantic cache (RediSearch vector index + threshold)
+
+- **What:** `services/semantic_cache.py` — cached entries stored as Redis hashes (question, source TAG, answer JSON, 384-dim FLOAT32 embedding) behind a RediSearch `FLAT` cosine index; lookup embeds the incoming question, runs a KNN-1 search filtered by `source`, and returns the cached answer only if similarity ≥ `SIMILARITY_THRESHOLD`.
+- **Why:** the direct fix for Unit 20's paraphrase miss.
+- **Files changed:** `services/semantic_cache.py`.
+- **Command used:** throwaway script caching one question then looking up 5 variants + a wrong-document scope; then a threshold sweep at 0.92 vs 0.85.
+- **Observed result:** all six correct — identical → HIT, **paraphrase → HIT**, born-in → MISS, different question → MISS, unrelated → MISS, other document → MISS.
+- **Design decision:** threshold `0.92` chosen from measured similarities, not intuition — paraphrase 0.9399, dangerous near-miss ("born in" vs "work in", different answers) 0.8718, same-person-different-question 0.8011. Only a 0.068 window; biased strict because a false hit is far more costly than a miss. `FLAT` not HNSW (a few hundred entries don't need ANN, and exact search removes approximation as a variable while tuning the threshold).
+- **Failure mode discovered:** at threshold 0.85, *"What city was Maya Chen **born** in?"* is served the cached *"Maya Chen works in Toronto"* — wrong answer, instant, with a citation, and **zero LLM calls in the path to catch it**. A cache hit bypasses both Phase 4 grounding and Phase 6 relevance grading, making the cache the only component with no safety net behind it.
+- **Remaining work:** wire into `/query` via a cache-aside wrapper, and measure the actual token/latency saving on a hit.
+
+### Unit 22 — Cache-aside wiring into `/query`
+
+- **What:** `answer_question_cached()` in `services/graph.py` (check cache → on miss run the graph → store → return), `routers/query.py` switched to it, `QueryResponse.cached: bool` added so hits are visible to the client.
+- **Why:** makes the cache real rather than a library sitting unused, and lets the saving be measured.
+- **Files changed:** `services/graph.py`, `routers/query.py`, `schemas/query.py`.
+- **Command used:** `redis-cli FLUSHALL`; server on 8001; four timed `curl` calls.
+- **Observed result:** cold **9.62s** (`cached:false`) → identical question **0.01s** (`cached:true`) → **paraphrase never asked before 0.01s** (`cached:true`, correct answer) → near-miss "born in" **3.95s** (`cached:false`, correctly answered **Vancouver**).
+- **Design decision:** wrapper sits outside the graph (a hit must skip graph construction and all its LLM calls, so an `if` beats a node + conditional edge). **`eval/run_eval.py` intentionally still calls the uncached `answer_question_graph()`** — routing eval through the cache would make every run after the first replay cached answers, reporting a perfect score while testing nothing.
+- **Failure mode noted:** a hit is ~960× faster precisely because it skips retrieval, grading, and generation — the benefit and the risk are the same fact. Also, the full-width `【1】` citation quirk persists on `gpt-oss-120b`, so it's general model behaviour rather than model-specific.
+
 ## Remaining work (current phase)
 
-Phase 8 in progress: Redis reachable, exact-match cache built and its limitation demonstrated. Next unit is the semantic cache itself — RediSearch vector index over cached questions, cosine similarity threshold for what counts as "close enough", and wiring into `/query` — pending its own proposal/approval.
+**Phase 8 complete.** Code track (Redis Stack, exact-match strawman, semantic cache with measured threshold, cache-aside wiring) built and observed end-to-end over HTTP. Concept track written in `Interview_prep.md` §10.
+
+**Earned claim:** "Implemented a Redis semantic query cache using RediSearch vector similarity with a measured similarity threshold, wired into the query endpoint as a cache-aside layer — cutting repeat and paraphrased queries from ~9.6s to ~0.01s with zero LLM calls, while preserving correctness on near-miss questions."
+
+Phase 9 next: embedding failure modes — negation test set and threshold tuning — pending its own proposal/approval.
