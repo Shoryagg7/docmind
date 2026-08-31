@@ -233,3 +233,27 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Resume claim earned:** **"Built a 25-question golden evaluation set with an LLM-as-judge scoring harness, covering both correctly-answerable and deliberately-unanswerable queries, and used it to verify grounding held across the full agentic RAG pipeline."** Earned now — the eval ran against the live graph-based `/query` implementation (via `answer_question_graph`), not a mock, and scored both directions of correctness (right answers accepted, refusals accepted where warranted).
 
 **Phase 7 complete.** Code track (25-question golden set, LLM-as-judge harness) built and observed at 25/25. Concept track (eval methodology, LLM-as-judge) written in `Interview_prep.md` §9.
+
+---
+
+## Unit 19 — Redis Stack service + connectivity (no caching logic yet)
+
+- **Concept touched:** none new yet — this is the plumbing unit that precedes semantic caching, same pattern as "pgvector schema before search" (Unit 7) and "2-node graph before retry logic" (Unit 13).
+- **Files changed:** `docker-compose.yml` (added `redis` service), `core/config.py` (added `redis_url`), `core/redis_client.py` (new), `requirements.txt` (added `redis>=5.0`).
+- **Design decision:** `redis/redis-stack-server` rather than plain `redis` — Redis Stack bundles the RediSearch module, which provides the vector-similarity index the semantic cache will need in the next unit; plain Redis can only do exact-key lookup, which is precisely the approach being rejected. Deliberately **no volume mounted**: a cache is not a source of truth, and losing it on restart is correct behavior, not data loss. `get_redis_client()` mirrors `core/db.py`'s role for Postgres — client construction lives in `core/`, and no service code constructs its own connection.
+- **Test/command run:** `docker compose up -d redis`; `docker compose exec -T redis redis-cli ping` → `PONG`; `.venv/bin/python -m core.redis_client`.
+- **Observed behavior:** `Redis says: alive` — a real SET then GET round trip through the app's own async client, not just a container health check.
+- **Failure mode discovered:** with Redis stopped (`docker compose stop redis`), the client raises `redis.exceptions.ConnectionError: Error 111 connecting to localhost:6379`. This directly shapes the next unit's design: a cache being unavailable must **not** take the whole `/query` path down. The semantic cache has to treat a Redis failure as a cache miss and fall through to the normal graph, rather than letting the exception propagate — a cache that can break the app is worse than no cache.
+- **Resume claim earned:** none yet — a reachable Redis container isn't "semantic caching." That's earned once a paraphrased question actually hits the cache and skips the LLM calls.
+
+---
+
+## Unit 20 — Exact-match cache (deliberately the naive version)
+
+- **Concept touched:** cache key design — a cache is only as useful as its key.
+- **Files changed:** `services/cache.py` (new: `get_cached_answer()`, `set_cached_answer()`, 1-hour TTL).
+- **Design decision:** built the *exact-key* cache first, on purpose, knowing it's the version being rejected — same pedagogy as exact vector search before HNSW (Units 8/9). Seeing the paraphrase miss firsthand is what makes the semantic cache's added complexity justified rather than assumed. Two further decisions: (1) cache keys include `source`, so a cached answer for one document can never be served for a query scoped to a different one; (2) a fresh Redis client per call rather than an `lru_cache`d singleton — deliberately avoiding the cross-event-loop reuse bug already hit with SQLAlchemy pooling in Unit 8, at the cost of per-call connection overhead. Worth revisiting once the cache is wired into the long-lived FastAPI event loop.
+- **Test/command run:** a throwaway script caching one question, then looking up (a) the identical string, (b) a paraphrase, (c) the same string scoped to a different document. Then the whole thing re-run with `docker compose stop redis`.
+- **Observed behavior:** identical string → **HIT**. Paraphrase *"Which city is Maya Chen based in?"* → **MISS**, despite being the same question semantically. Different document scope → **MISS** (correct). With Redis stopped: every lookup → **MISS**, no exception raised.
+- **Failure mode discovered:** the paraphrase miss *is* the finding, and it's the entire justification for Phase 8 — an exact-key cache isn't merely less useful, it's actively negative-value in real traffic: you pay a Redis round trip on every single request to hit approximately never, since real users don't retype character-identical questions. Separately, the Redis-down run confirms the safety property demanded by Unit 19: `RedisError` is swallowed and treated as a miss in both directions (a failed *write* must not fail the request either), so a cache outage degrades `/query` to its normal uncached path instead of taking it down.
+- **Resume claim earned:** none — this is the strawman. The claim arrives when the paraphrase above returns a HIT.

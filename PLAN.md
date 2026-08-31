@@ -13,7 +13,7 @@ Agentic RAG document assistant. Built one small, observable unit at a time per `
 | 5 | Chains vs graphs, state, reducers | LangGraph rewrite | Done |
 | 6 | Self-correction, bounded loops | Relevance grader + query rewrite | Done |
 | 7 | Eval methodology, LLM-as-judge | 25-question golden set | Done |
-| 8 | Cache semantics, TTL, thresholds | Redis semantic cache | Not started |
+| 8 | Cache semantics, TTL, thresholds | Redis semantic cache | In progress |
 | 9 | Embedding failure modes | Negation set + threshold tuning | Not started |
 | 10 | Streaming, token/cost accounting | SSE, UI, logging | Not started |
 | 11 | Portfolio polish | README, demo, cleanup | Not started |
@@ -252,4 +252,29 @@ Found via real usage (developer uploaded their own resume) rather than planned w
 
 **Earned claim:** "Built a 25-question golden evaluation set with an LLM-as-judge scoring harness, covering both correctly-answerable and deliberately-unanswerable queries, and used it to verify grounding held across the full agentic RAG pipeline."
 
-Phase 8 next: Redis Stack semantic query cache (cache semantics, TTL, similarity thresholds) — pending its own proposal/approval.
+## Phase 8 — Redis semantic cache
+
+### Unit 19 — Redis Stack service + connectivity
+
+- **What:** `redis` service added to `docker-compose.yml` (`redis/redis-stack-server`), `redis_url` added to settings, `core/redis_client.py` with `get_redis_client()` and a runnable smoke test. No caching logic.
+- **Why:** the cache can't be built before Redis is reachable from the app; smallest observable slice, matching the "plumbing before logic" pattern used in Units 7 and 13.
+- **Files changed:** `docker-compose.yml`, `core/config.py`, `core/redis_client.py`, `requirements.txt`.
+- **Command used:** `docker compose up -d redis`; `.venv/bin/python -m core.redis_client`.
+- **Observed result:** `Redis says: alive` — real SET/GET round trip through the app's async client; `redis-cli ping` → `PONG`.
+- **Design decision:** Redis **Stack** (not plain Redis) because RediSearch provides the vector index the semantic cache needs; plain Redis only does exact-key lookup, which is the approach being rejected. No volume mounted — a cache isn't a source of truth, so losing it on restart is correct.
+- **Failure mode discovered:** with Redis stopped, the client raises `ConnectionError: Error 111`. Directly constrains the next unit: the cache must treat Redis being down as a cache miss and fall through to the graph, never propagate the exception — a cache that can take down `/query` is worse than no cache.
+- **Remaining work:** the actual semantic cache — embed the incoming question, vector-search prior cached questions in Redis, return the cached answer above a similarity threshold, otherwise run the graph and store the result with a TTL.
+
+### Unit 20 — Exact-match cache (deliberately the naive version)
+
+- **What:** `services/cache.py` — `get_cached_answer()` / `set_cached_answer()`, keyed on `f"docmind:cache:{source}:{question}"` with a 1-hour TTL, and `RedisError` swallowed on both read and write.
+- **Why:** build the naive key-on-raw-string version first and watch it miss a paraphrase — the same "see the limitation before buying the fix" pattern as exact search before HNSW. Costs zero Groq tokens to demonstrate, which matters while the daily quota is exhausted.
+- **Files changed:** `services/cache.py`.
+- **Command used:** throwaway script caching one question, then looking up the identical string, a paraphrase, and a different document scope; re-run with `docker compose stop redis`.
+- **Observed result:** identical string → HIT; paraphrase *"Which city is Maya Chen based in?"* → **MISS**; other document scope → MISS (correct). Redis stopped → all MISS, no exception.
+- **Design decision:** cache key includes `source` so one document's cached answer can never serve another's query. Fresh client per call rather than a cached singleton, deliberately avoiding the cross-event-loop reuse bug hit in Unit 8.
+- **Remaining work:** replace the exact key with an embedding + similarity threshold so the paraphrase hits.
+
+## Remaining work (current phase)
+
+Phase 8 in progress: Redis reachable, exact-match cache built and its limitation demonstrated. Next unit is the semantic cache itself — RediSearch vector index over cached questions, cosine similarity threshold for what counts as "close enough", and wiring into `/query` — pending its own proposal/approval.

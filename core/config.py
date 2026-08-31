@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     groq_api_key: str
     database_url: str = "postgresql+asyncpg://docmind:docmind@localhost:5432/docmind"
+    redis_url: str = "redis://localhost:6379"
 
 
 @lru_cache

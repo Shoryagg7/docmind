@@ -2,7 +2,7 @@ from groq import Groq
 
 from core.config import get_settings
 
-MODEL = "openai/gpt-oss-20b"
+MODEL = "openai/gpt-oss-120b"
 
 
 def generate(prompt: str, system: str | None = None) -> str:
