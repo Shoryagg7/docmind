@@ -242,3 +242,33 @@ This retry loop makes the system slower and more expensive to fail, not smarter 
 - What is the real cost of this loop, concretely, in number of extra LLM calls, for a query that fails grading every single time up to the retry cap?
 - Rewriting the query and retrying doesn't guarantee a better result — under what condition does the retry loop actually help, and under what condition is it just wasted latency/cost for the same eventual answer?
 - What would happen if `MAX_RETRIES` were removed entirely and the conditional edge only checked `relevant_chunks` being empty? Walk through the failure.
+
+---
+
+## 9. Eval Methodology and LLM-as-Judge
+
+**What it is**
+Evaluating a RAG system isn't a single pass/fail check — it's running a fixed set of representative questions ("a golden set") through the real pipeline and scoring each answer against a known-correct reference. The hard part isn't running the questions, it's *scoring* the answers: DocMind's answers are full sentences ("Maya Chen currently works for Northwind Analytics. [1]"), and a correct answer can be phrased many different ways, so exact string matching would falsely fail correct answers. LLM-as-judge solves this by using a *second*, separate LLM call whose only job is to compare the system's actual answer against a reference answer and decide if they convey the same information — acting as an automated stand-in for a human grader, at the cost of being fallible itself.
+
+**Where it lives**
+`eval/golden_set.py` — 25 question/source/reference-answer triples. `eval/judge.py::llm_as_judge()` — the scoring call. `eval/run_eval.py` — runs every golden-set question through the live `answer_question_graph()` (the same function `/query` calls), judges each, and prints a pass/fail summary.
+
+**Why we chose it**
+Requirement: verify, with evidence rather than spot-checking a handful of manual queries, that grounding and retrieval actually hold across a representative spread of questions — including questions that should be refused, not just ones that should succeed.
+Choice: a small golden set (25 questions: 12 against one document, 10 against another, 3 deliberately unanswerable) scored by a dedicated LLM-as-judge call, built in two stages — the judging mechanism proven on 3 questions first (Unit 17), then scaled to 25 (Unit 18).
+Benefit: caught two real, different things. First, on the 3-question version: a wrong reference answer in the golden set itself (asked about a "free tier" that doesn't exist in the document) — the system was actually correct to refuse, but the eval initially reported it as a failure, which is exactly the kind of mistake that's invisible without checking reference answers against real source content. Second, on the full 25-question run: the judge correctly passed all 22 answerable questions (including ones with markdown formatting and the recurring full-width-bracket citation quirk) and all 3 unanswerable ones, giving actual evidence — not assumption — that grounding holds at this scale.
+Cost: LLM-as-judge is itself an LLM call, with the same reliability limits as everything else built on one — it can be wrong, inconsistent between runs, or biased toward agreeing with plausible-sounding answers. Nothing in this harness checks the judge's own correctness; that's a real, acknowledged limitation, not an oversight.
+Rejected alternative: string-similarity or substring scoring (exact match, or a metric like ROUGE) instead of a second LLM call. Rejected because DocMind's answers are natural sentences with citations, punctuation, and formatting that varies run to run even when the underlying fact is identical — a strict string metric would flag correct answers as failures constantly, which is worse than the judge's fallibility.
+
+**Soundbite**
+"Testing this manually meant typing one question at a time and eyeballing the answer — that doesn't scale and isn't evidence. So I built a golden set of 25 real questions against my two uploaded documents, including three that should be refused, and scored every answer with a second LLM call that compares it to a known-correct reference instead of doing exact string matching, since correct answers are phrased differently every time. It actually caught a bug on the first try — not in the pipeline, in my own golden set. I'd written a reference answer that wasn't actually true of the document, and the eval flagged the system's correct 'I don't know' as a failure. I only caught that by going back and reading the real chunk content in Postgres before trusting the eval's verdict."
+
+**The gotcha**
+An eval is only as trustworthy as its reference answers, and nothing enforces that they're actually grounded in the real documents — a golden set is just as capable of being wrong as the system under test, and a failing eval doesn't automatically mean the *system* is broken. The fix here was manual and unglamorous: read the actual chunk content out of Postgres for every reference answer before trusting it, the same discipline used to trust any other test fixture. A second, quieter gotcha: LLM-as-judge grading everything as "correct" (or everything as "incorrect") would still produce a number that *looks* like a real eval score — the harness doesn't self-check for a degenerate judge, so a 25/25 or a 0/25 result should prompt a skim of the actual judge verdicts, not just trust in the aggregate count.
+
+**Self-test**
+- Why does exact string matching fail as an eval strategy for a RAG system's answers specifically?
+- What's the concrete failure this project actually hit that proves "an eval can be wrong, not just the system"?
+- What are the two different, legitimate reasons a question in this golden set should return "I don't know," and why does testing more than one of them matter?
+- LLM-as-judge is itself an LLM call — what's the specific risk that introduces, and what would a degenerate (always-correct or always-incorrect) judge look like from the outside?
+- Why was the eval harness built and proven on 3 questions before writing all 25, instead of writing all 25 first?

@@ -12,7 +12,7 @@ Agentic RAG document assistant. Built one small, observable unit at a time per `
 | 4 | Prompting, grounding, citations | Naive RAG end-to-end | Done |
 | 5 | Chains vs graphs, state, reducers | LangGraph rewrite | Done |
 | 6 | Self-correction, bounded loops | Relevance grader + query rewrite | Done |
-| 7 | Eval methodology, LLM-as-judge | 25-question golden set | Not started |
+| 7 | Eval methodology, LLM-as-judge | 25-question golden set | Done |
 | 8 | Cache semantics, TTL, thresholds | Redis semantic cache | Not started |
 | 9 | Embedding failure modes | Negation set + threshold tuning | Not started |
 | 10 | Streaming, token/cost accounting | SSE, UI, logging | Not started |
@@ -225,4 +225,31 @@ Found via real usage (developer uploaded their own resume) rather than planned w
 
 **Earned claim:** "Built an agentic RAG pipeline in LangGraph with self-correcting retrieval — a relevance-grading node and bounded query-rewrite retries — serving live queries end-to-end."
 
-Phase 7 next: 25-question golden eval set (eval methodology, LLM-as-judge) — pending its own proposal/approval.
+## Phase 7 — Eval methodology, LLM-as-judge
+
+### Unit 17 — Eval harness on a 3-question golden set
+
+- **What:** `eval/golden_set.py` (question/source/reference_answer triples), `eval/judge.py` (`llm_as_judge()`, a separate LLM call forced to strict correct/incorrect), `eval/run_eval.py` (runs each question through `answer_question_graph`, judges it, prints a pass/fail summary).
+- **Why:** the judging mechanism is what's actually worth proving before writing 25 questions' worth of data on top of it.
+- **Command used:** `docker compose up -d postgres` (had stopped between sessions); `.venv/bin/python -m eval.run_eval`.
+- **Observed result:** first run 2/3 — genuine unplanned failure, traced to a wrong reference answer in the golden set itself (asked about a "free tier" that doesn't exist in `sample2.pdf`); the system's "I don't know" was actually correct. Fixed the golden set to match real document content; re-run 3/3.
+- **Design decision:** LLM-as-judge over string-similarity scoring, since correct answers vary in phrasing.
+- **Remaining work:** scale from 3 to 25 questions across both fixture documents, covering both answerable and deliberately unanswerable cases.
+
+### Unit 18 — Scaled golden set to 25 questions
+
+- **What:** `eval/golden_set.py` grown to 25 entries — 12 against `sample.pdf`, 10 against `sample2.pdf`, 3 deliberately unanswerable (out-of-scope topic, wrong-document scoping, topic in neither document).
+- **Why:** the actual "25-question golden set" deliverable; every reference answer verified against real chunk content in Postgres first, directly because Unit 17 caught a fabricated one.
+- **Command used:** `docker compose up -d postgres`; `.venv/bin/python -m eval.run_eval`.
+- **Observed result:** 25/25 passed — all answerable questions correct and cited, all 3 unanswerable questions correctly refused rather than guessed.
+- **Design decision:** the 3 unanswerable cases were chosen to cover 3 distinct reasons an answer can legitimately not exist, not just one repeated pattern.
+- **Failure mode discovered:** Unit 11's citation-format gotcha (full-width `【1】` brackets) recurred live in this run; absorbed by the existing fallback, didn't affect scoring, logged as evidence the underlying non-determinism is still real.
+- **Remaining work:** none for Phase 7 itself.
+
+## Remaining work (current phase)
+
+**Phase 7 complete.** Code track (25-question golden set, LLM-as-judge harness) built and observed at 25/25 against the live graph-based `/query` implementation. Concept track (eval methodology, LLM-as-judge) written in `Interview_prep.md` §9.
+
+**Earned claim:** "Built a 25-question golden evaluation set with an LLM-as-judge scoring harness, covering both correctly-answerable and deliberately-unanswerable queries, and used it to verify grounding held across the full agentic RAG pipeline."
+
+Phase 8 next: Redis Stack semantic query cache (cache semantics, TTL, similarity thresholds) — pending its own proposal/approval.

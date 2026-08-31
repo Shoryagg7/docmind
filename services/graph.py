@@ -61,7 +61,7 @@ def build_graph(session: AsyncSession):
         all_sources = [
             {"id": i + 1, "source": c.source, "content": c.content}
             for i, c in enumerate(chunks)
-        ]
+        ] 
         sources = [s for s in all_sources if s["id"] in cited_ids] or all_sources
 
         return {"answer": answer, "sources": sources}

@@ -207,3 +207,29 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Resume claim earned:** **"Built an agentic RAG pipeline in LangGraph with self-correcting retrieval — a relevance-grading node and bounded query-rewrite retries — serving live queries end-to-end."** Earned now, not before — this is the point the graph stopped being a side experiment and became the actual code path answering real HTTP requests.
 
 **Phase 6 complete.** Code track (relevance grader, query rewrite, conditional edge, bounded retry) built, wired into `/query`, and observed both on the happy path and under a forced failure that exercises the full retry-then-give-up behavior. Concept track (self-correction, bounded loops) written in `Interview_prep.md` §8; §7 updated to reflect the graph's final shape.
+
+---
+
+## Unit 17 — Eval harness on a 3-question golden set (LLM-as-judge)
+
+- **Concept touched:** eval methodology / LLM-as-judge.
+- **Files changed:** `eval/golden_set.py` (new), `eval/judge.py` (new), `eval/run_eval.py` (new).
+- **Design decision:** judge is a separate LLM call (`llm_as_judge(question, reference_answer, actual_answer)`) forced to a strict `correct`/`incorrect` reply, not a string-similarity metric — chosen because DocMind's answers are full sentences that vary in phrasing even when correct. Built on 3 questions, not the full 25, to prove the judging mechanism works before scaling data volume.
+- **Test/command run:** `docker compose up -d postgres` (container had stopped since the last session); `.venv/bin/python -m eval.run_eval`.
+- **Observed behavior:** first run scored 2/3 — a real, unplanned failure. Investigation (`docker compose exec postgres psql ... SELECT content FROM chunks WHERE source='sample2.pdf'`) showed the golden set's own reference answer was wrong: it asked about a "free tier / 5GB" that doesn't exist anywhere in `sample2.pdf` (actual pricing is Starter/Pro/Enterprise, no free tier). The system had correctly answered "I don't know" — grounding held — but the eval flagged it as a failure because the *golden set* was fabricated, not grounded in the real document. Fixed by replacing the question with one actually answerable from the real text ("How many gigabytes does the Starter tier include?" → "50 gigabytes"). Re-run: 3/3 passed.
+- **Failure mode discovered:** a golden set's own reference answers can be silently wrong if not verified against the actual source documents — an eval that "fails" doesn't always mean the system is wrong; it can mean the eval itself is wrong. This is a real, general eval-methodology gotcha, not specific to this project, and it was caught by inspecting the raw DB content before trusting the eval's verdict.
+- **Resume claim earned:** none yet — 3 questions isn't the "25-question golden set" scope item. That's earned once scaled up and results are analyzed in aggregate.
+
+---
+
+## Unit 18 — Scaled golden set to 25 questions
+
+- **Concept touched:** eval methodology (continued) — question design across answerable and deliberately-unanswerable cases.
+- **Files changed:** `eval/golden_set.py` (grown from 3 to 25 entries: 12 questions against `sample.pdf`, 10 against `sample2.pdf`, 3 deliberately unanswerable — one out-of-scope topic, one cross-document scoping case, one topic absent from both documents).
+- **Design decision:** every reference answer was written by reading the real chunk content out of Postgres first (`docker compose exec postgres psql ... SELECT content FROM chunks WHERE source=...`), not from memory or assumption — directly because Unit 17 caught a fabricated reference answer ("free tier / 5GB") that doesn't exist anywhere in `sample2.pdf`. The 3 unanswerable cases were chosen to cover three different reasons an answer can legitimately not exist: topic genuinely absent from the scoped document, a question scoped to the wrong document entirely, and a topic absent from both uploaded documents with no scoping at all.
+- **Test/command run:** `docker compose up -d postgres` (container had stopped between sessions, data confirmed intact via `SELECT source, COUNT(*) FROM chunks GROUP BY source` before running); `.venv/bin/python -m eval.run_eval`.
+- **Observed behavior:** 25/25 passed. All 22 answerable questions returned correct, grounded, cited answers; all 3 unanswerable questions correctly returned "I don't know" rather than guessing.
+- **Failure mode discovered:** the citation-format gotcha from Unit 11 recurred live during this run — one answer ("Senior Backend Engineer") came back with full-width brackets (`【1】`) instead of ASCII `[1]`. Not a new bug: the existing fallback (`sources = cited-only or all-retrieved`) absorbed it silently, and since the eval judge scores answer *content*, not citation formatting, it didn't affect the pass/fail count. Logged because it's evidence the underlying non-determinism is still real and unfixed, just successfully contained by an existing safeguard.
+- **Resume claim earned:** **"Built a 25-question golden evaluation set with an LLM-as-judge scoring harness, covering both correctly-answerable and deliberately-unanswerable queries, and used it to verify grounding held across the full agentic RAG pipeline."** Earned now — the eval ran against the live graph-based `/query` implementation (via `answer_question_graph`), not a mock, and scored both directions of correctness (right answers accepted, refusals accepted where warranted).
+
+**Phase 7 complete.** Code track (25-question golden set, LLM-as-judge harness) built and observed at 25/25. Concept track (eval methodology, LLM-as-judge) written in `Interview_prep.md` §9.
