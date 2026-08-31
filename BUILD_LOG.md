@@ -284,3 +284,37 @@ This file exists so a separate teaching assistant can reconstruct exactly what h
 - **Resume claim earned:** extends Unit 21's claim to the live service — **"...wired into the query endpoint as a cache-aside layer, cutting repeat and paraphrased queries from ~9.6s to ~0.01s with zero LLM calls, while preserving correctness on near-miss questions."**
 
 **Phase 8 complete.** Code track (Redis Stack, exact-match strawman, semantic cache, cache-aside wiring) built and observed end-to-end. Concept track (cache semantics, TTL, similarity thresholds) written in `Interview_prep.md` §10.
+
+---
+
+## Unit 23 — Negation test set (embedding, retrieval, and cache impact)
+
+- **Concept touched:** embedding failure modes — negation.
+- **Files changed:** `eval/negation_set.py` (new: 6 statement/negation pairs + 3 control pairs), `eval/run_negation.py` (new: measures embedding-level and retrieval-level impact). Zero Groq calls — pure embedding math plus pgvector search, deliberately chosen while the daily quota was constrained.
+- **Design decision:** measured against a **control set** rather than reporting negation scores alone. A raw 0.87 means nothing without knowing what "genuinely different" scores; the comparison is what makes the result interpretable. Pairs drawn partly from the real fixture documents (the Enterprise refund clause in `sample2.pdf` is an actual negated fact) so the finding is about this system, not a textbook example.
+- **Test/command run:** `.venv/bin/python -m eval.run_negation`, then two targeted cache probes.
+- **Observed behavior:**
+  - **Embedding level:** statement vs. its own negation averaged **0.8728**; genuinely different statements averaged **0.4692** — a **+0.4036** gap in exactly the wrong direction. Worst case: *"Nimbus is SOC 2 Type II certified"* vs *"...is **not** SOC 2 Type II certified"* = **0.9586**. Opposites score nearly twice as similar as merely-different statements.
+  - **Retrieval level:** *"Are Enterprise customers eligible for the 14-day refund window?"* and its negated form retrieved **identical chunks** (same ids, both k=2), at 0.9885 query similarity. This one is survivable — the retrieved chunk contains the negated fact, so the grounded LLM can still answer correctly; retrieval being negation-blind is masked by generation.
+  - **Cache level — not survivable.** *"Which tiers **are** eligible for the 14-day refund?"* (answer: Starter and Pro) vs *"Which tiers are **not** eligible?"* (answer: Enterprise) scored **0.9879**. The cache returned a HIT and served the wrong answer instantly, with a citation, no LLM in the path.
+- **Failure mode discovered — the important one:** **no similarity threshold can fix this.** The negation pair scores **0.9879**, while the paraphrase the cache exists to catch scores **0.9399**. The thing we must reject scores *higher* than the thing we must accept, so any threshold that admits paraphrases necessarily admits negations. Phase 8's threshold tuning is therefore provably insufficient against negation — the defect is in the embedding space, not the cutoff. This also reframes Unit 21's threshold work honestly: 0.92 protects against *near-miss* questions (born vs. work, 0.8718) and does nothing whatsoever against negation.
+- **Resume claim earned:** **"Built a negation test set demonstrating that embedding similarity cannot distinguish a statement from its opposite (0.87 avg vs 0.47 for genuinely different text), and showed this defeats similarity-threshold semantic caching by construction — the negated query scores higher than the paraphrase the cache is designed to accept."** Earned — measured, reproduced end-to-end, and the impossibility argument is demonstrated rather than asserted.
+
+---
+
+## Unit 24 — Lexical negation guard on cache lookups
+
+- **Concept touched:** mitigating an embedding failure mode from *outside* the embedding.
+- **Files changed:** `services/semantic_cache.py` (added `has_negation()` and a polarity check after the threshold test).
+- **Design decision:** the guard is deliberately **not** similarity-based, because Unit 23 proved similarity cannot work here — the negation (0.9879) outscores the paraphrase (0.9399), so no cutoff separates them. Instead the cached question text is stored and returned by the search, and a hit is rejected when the incoming question and the cached question **disagree on the presence of negation markers**. Cheap (one regex, no extra LLM call, no extra round trip) and orthogonal to the failing signal. Placed *after* the threshold check so it only runs on candidates that already passed similarity.
+- **Test/command run:** `redis-cli FLUSHALL`, then the Unit 21 suite re-run as a regression check, plus a negation suite and a deliberate failure-probe suite.
+- **Observed behavior:**
+  - **Fixed:** *"Which tiers are **not** eligible..."* (0.9879) and *"...**aren't** eligible..."* (0.9896) both now **MISS**. Previously both were HITs serving the wrong answer.
+  - **No regression:** all six Unit 21 cases still correct, and a genuine paraphrase *"Which tiers **can get** the 14-day refund?"* (0.9539, no negation on either side) still **HITs**.
+- **Failure mode discovered — the guard's own limits, measured in both directions:**
+  - **False negative (dangerous):** *"Which tiers are **barred from** the 14-day refund?"* scores **0.9273** — above threshold — and contains **no lexical negation marker**, so the guard passes it through and the wrong answer is still served. Semantic negation expressed through vocabulary ("barred", "denied", "excluded from" phrasings outside the marker list) defeats it entirely.
+  - **False positive (safe):** *"Which tiers can get a refund with **no** restrictions?"* contains "no" in a non-negating role, so the guard rejects a hit that would have been legitimate. Costs a cache miss, which is the acceptable direction.
+  - Net: this is a **mitigation, not a fix**. It converts the common, lexically-marked case from "silently wrong" to "correctly missed", and leaves vocabulary-level negation unsolved. A real fix needs a model that encodes negation — a cross-encoder or an LLM verification step on cache hits — which costs the latency the cache exists to save.
+- **Resume claim earned:** extends Unit 23 — **"...and mitigated it with a lexical negation guard on cache lookups, verified to block negated hits without regressing legitimate paraphrase hits, with the guard's own residual failure mode (semantic negation without lexical markers) measured rather than assumed."**
+
+**Phase 9 complete.** Code track (negation set, threshold analysis, negation guard) built and measured. Concept track (embedding failure modes) written in `Interview_prep.md` §11.

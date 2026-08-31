@@ -24,11 +24,26 @@ SIMILARITY_THRESHOLD = 0.92
 
 NO_SOURCE = "__all__"
 
+# Similarity alone cannot separate a question from its negation: measured on the
+# fixture set, "which tiers ARE eligible" vs "which tiers are NOT eligible" scores
+# 0.9879 — higher than the 0.9399 paraphrase the cache exists to accept. No
+# threshold can admit one and reject the other, so the guard has to come from
+# outside the embedding entirely.
+_NEGATION_RE = re.compile(
+    r"(?:\b(?:not|never|no|none|neither|nor|without|except|excluding|cannot|"
+    r"ineligible|excluded|unable|lacks?)\b|n't\b)",
+    re.IGNORECASE,
+)
+
 _TAG_SPECIAL = re.compile(r"([,.<>{}\[\]\"':;!@#$%^&*()\-+=~ /\\])")
 
 
 def _escape_tag(value: str) -> str:
     return _TAG_SPECIAL.sub(r"\\\1", value)
+
+
+def has_negation(text: str) -> bool:
+    return _NEGATION_RE.search(text) is not None
 
 
 def _entry_key(question: str, source: str | None) -> str:
@@ -84,6 +99,12 @@ async def get_cached_answer(question: str, source: str | None = None) -> dict | 
     best = result.docs[0]
     similarity = 1.0 - float(best.dist)
     if similarity < SIMILARITY_THRESHOLD:
+        return None
+
+    # A question and its negation are near-identical in embedding space, so this
+    # check — not the threshold — is what stops "which tiers are NOT eligible"
+    # from being served the answer to "which tiers ARE eligible".
+    if has_negation(question) != has_negation(best.question):
         return None
 
     return json.loads(best.answer)

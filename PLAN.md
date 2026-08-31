@@ -14,7 +14,7 @@ Agentic RAG document assistant. Built one small, observable unit at a time per `
 | 6 | Self-correction, bounded loops | Relevance grader + query rewrite | Done |
 | 7 | Eval methodology, LLM-as-judge | 25-question golden set | Done |
 | 8 | Cache semantics, TTL, thresholds | Redis semantic cache | Done |
-| 9 | Embedding failure modes | Negation set + threshold tuning | Not started |
+| 9 | Embedding failure modes | Negation set + threshold tuning | Done |
 | 10 | Streaming, token/cost accounting | SSE, UI, logging | Not started |
 | 11 | Portfolio polish | README, demo, cleanup | Not started |
 
@@ -302,4 +302,36 @@ Found via real usage (developer uploaded their own resume) rather than planned w
 
 **Earned claim:** "Implemented a Redis semantic query cache using RediSearch vector similarity with a measured similarity threshold, wired into the query endpoint as a cache-aside layer — cutting repeat and paraphrased queries from ~9.6s to ~0.01s with zero LLM calls, while preserving correctness on near-miss questions."
 
-Phase 9 next: embedding failure modes — negation test set and threshold tuning — pending its own proposal/approval.
+## Phase 9 — Embedding failure modes
+
+### Unit 23 — Negation test set
+
+- **What:** `eval/negation_set.py` (6 statement/negation pairs + 3 control pairs), `eval/run_negation.py` (measures embedding-level similarity and retrieval-level impact). Zero Groq calls.
+- **Why:** Phase 9's core concept, and the Unit 6 negation observation (0.888 on one example) deserved to become a measured set rather than an anecdote.
+- **Files changed:** `eval/negation_set.py`, `eval/run_negation.py`.
+- **Command used:** `.venv/bin/python -m eval.run_negation`, plus two targeted cache probes.
+- **Observed result:**
+  - Embedding: negation pairs avg **0.8728** vs control (genuinely different) avg **0.4692**. Worst case 0.9586 (SOC 2 certified vs not certified).
+  - Retrieval: positive and negated queries retrieved **identical chunks** — survivable, since the chunk contains the negated fact and grounded generation still answers correctly.
+  - Cache: *"Which tiers **are** eligible for a refund?"* vs *"Which tiers are **not** eligible?"* = **0.9879** → **CACHE HIT, wrong answer served** with a citation and no LLM in the path.
+- **Design decision:** measured against a control set, not in isolation — a 0.87 is meaningless without knowing that genuinely-different text scores 0.47.
+- **Failure mode discovered:** **no threshold can fix this.** The negation scores **0.9879** while the paraphrase the cache exists to catch scores **0.9399** — the thing to reject scores higher than the thing to accept. Phase 8's 0.92 threshold protects against near-miss questions and is provably useless against negation.
+- **Remaining work:** a mitigation. The cache needs a negation guard that doesn't rely on similarity at all.
+
+### Unit 24 — Lexical negation guard on cache lookups
+
+- **What:** `has_negation()` in `services/semantic_cache.py`, plus a polarity check that rejects a cache hit when the incoming and cached questions disagree on negation markers. Runs after the threshold check, costs one regex.
+- **Why:** Unit 23 proved similarity cannot separate a question from its negation, so the guard has to use a signal from outside the embedding.
+- **Files changed:** `services/semantic_cache.py`.
+- **Command used:** `redis-cli FLUSHALL`; Unit 21 suite as regression check; negation suite; failure-probe suite.
+- **Observed result:** negated forms (0.9879 and 0.9896) now **MISS** instead of serving wrong answers. No regression — all six Unit 21 cases still correct, and a genuine paraphrase at 0.9539 still HITs.
+- **Design decision:** guard placed after the similarity check (only runs on candidates that already passed) and based on lexical markers rather than any learned signal, so it adds no latency and no LLM call to the path the cache exists to make fast.
+- **Failure mode discovered:** measured in both directions. **False negative (dangerous):** *"Which tiers are **barred from** the refund?"* scores 0.9273 with no lexical marker → still HITs → still wrong. Vocabulary-level negation defeats the guard. **False positive (safe):** *"...with **no** restrictions"* trips the marker in a non-negating role and loses a legitimate hit. This is a mitigation, not a fix — a real fix needs a cross-encoder or an LLM verification step on hits, which costs the latency the cache exists to save.
+
+## Remaining work (current phase)
+
+**Phase 9 complete.** Code track (negation set, threshold analysis, negation guard) built and measured; concept track written in `Interview_prep.md` §11.
+
+**Earned claim:** "Built a negation test set demonstrating that embedding similarity cannot distinguish a statement from its opposite (0.87 avg vs 0.47 for genuinely different text), showed this defeats similarity-threshold semantic caching by construction, and mitigated it with a lexical negation guard — with the guard's own residual failure mode measured rather than assumed."
+
+Phase 10 next: SSE streaming, static HTML page, token/cost logging — pending its own proposal/approval.

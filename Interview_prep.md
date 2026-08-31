@@ -303,3 +303,34 @@ The threshold's failure is **asymmetric**, and the dangerous direction is silent
 - Two questions about the same person, asking about completely different facts, score 0.80 similarity. What does that tell you about what embeddings actually encode, and what does it imply for a semantic cache in a corpus that's all about one entity?
 - Why does `eval/run_eval.py` deliberately bypass the cache and call the graph directly? What would the eval report if it didn't?
 - What is TTL actually protecting you from here, and what does it *not* protect you from?
+
+---
+
+## 11. Embedding Failure Modes: Negation
+
+**What it is**
+Embedding models are trained so that text with similar *meaning* lands close together in vector space. But what they actually learn is closer to similar *topic and vocabulary* — and a sentence and its negation share almost every word, the same subject, and the same subject matter. So "the drug **is** approved" and "the drug is **not** approved" — statements that are exact opposites — end up as near neighbours. Cosine similarity has no mechanism to represent *disagreement*; it only measures proximity, and negation is a semantic operator that barely moves the vector.
+
+**Where it lives**
+`eval/negation_set.py` — 6 statement/negation pairs plus 3 control pairs. `eval/run_negation.py` — measures the effect at embedding level and at retrieval level. The mitigation is `services/semantic_cache.py::has_negation()` and the polarity check inside `get_cached_answer()`.
+
+**Why we chose it**
+Requirement: quantify a failure mode that had only been observed once, anecdotally (the 0.888 drug example in Unit 6), and find out whether it actually threatens this system.
+Choice: a measured negation set scored **against a control set** of genuinely different statements, then traced through all three layers — embeddings, retrieval, and cache.
+Benefit: the control comparison is what made the result meaningful. Negation pairs averaged **0.8728** while genuinely different statements averaged **0.4692** — a statement and its opposite score nearly *twice* as similar as two merely-unrelated statements. Worst case was 0.9586 for "is SOC 2 certified" vs "is not SOC 2 certified".
+Cost: the fix is only partial. The mitigation is a lexical marker check, which handles the common case and provably misses vocabulary-level negation.
+Rejected alternative: raising the cache's similarity threshold. Rejected because it is **provably impossible**, not merely unattractive — see the gotcha below.
+
+**Soundbite**
+"Embeddings encode topic, not truth value, so a sentence and its negation come out nearly identical — I measured 0.87 average across a negation set, versus 0.47 for genuinely different sentences. Opposites score twice as similar as unrelated text. The part that actually mattered for my system was where that lands: retrieval survives it, because the retrieved chunk still contains the negated fact and the grounded LLM reads it correctly. The cache doesn't, because a cache hit skips the LLM entirely. And I couldn't fix it by tuning the threshold — I checked, and the negation scores 0.988 while the paraphrase I *want* to hit scores 0.94, so the thing I need to reject scores higher than the thing I need to accept. No threshold exists. I had to add a signal from outside the embedding — a lexical negation check — and even that only covers negation that's lexically marked."
+
+**The gotcha**
+The impossibility result is the thing to remember, because "just raise the threshold" is the obvious wrong answer an interviewer will probe for. Measured on this corpus: the paraphrase the cache exists to serve scores **0.9399**; the negated question that must be rejected scores **0.9879**. The reject case outscores the accept case, so *no* cutoff separates them — the defect is in the embedding space, not the parameter. The second gotcha is architectural: negation is survivable at the retrieval layer (the chunk containing "Enterprise customers are **not** eligible" gets retrieved either way, and grounded generation reads it correctly) but *not* at the cache layer, because a cache hit bypasses retrieval, grading, and generation all at once. The same underlying flaw is harmless in one component and serves confidently wrong answers in another, purely because of what sits downstream of each. Third: the lexical guard that fixes the common case has its own measured hole — *"Which tiers are **barred from** the refund?"* scores 0.9273, carries no negation marker, and still gets served the wrong answer. Being able to state precisely what your defence covers and where it fails is stronger than claiming it's solved.
+
+**Self-test**
+- Why do a sentence and its negation embed so closely, given the embedding model is supposedly trained on meaning?
+- Why is comparing negation similarity against a *control* set necessary — what would the raw 0.87 number alone fail to tell you?
+- Prove that no similarity threshold can make the semantic cache negation-safe on this corpus. What two numbers do you need?
+- Negation is survivable at the retrieval layer but not at the cache layer. Why? What's structurally different about the two?
+- The lexical negation guard has a false-positive mode and a false-negative mode. Which one is dangerous, which is merely wasteful, and why is it correct to prefer the wasteful one?
+- What would an actual fix (not a mitigation) require, and what does it cost you that the current guard doesn't?
