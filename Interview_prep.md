@@ -245,33 +245,62 @@ This retry loop makes the system slower and more expensive to fail, not smarter 
 
 ---
 
-## 9. Eval Methodology and LLM-as-Judge
+## 9. Eval Methodology, LLM-as-Judge, and Proving One Pipeline Beats Another
 
 **What it is**
-Evaluating a RAG system isn't a single pass/fail check — it's running a fixed set of representative questions ("a golden set") through the real pipeline and scoring each answer against a known-correct reference. The hard part isn't running the questions, it's *scoring* the answers: DocMind's answers are full sentences ("Maya Chen currently works for Northwind Analytics. [1]"), and a correct answer can be phrased many different ways, so exact string matching would falsely fail correct answers. LLM-as-judge solves this by using a *second*, separate LLM call whose only job is to compare the system's actual answer against a reference answer and decide if they convey the same information — acting as an automated stand-in for a human grader, at the cost of being fallible itself.
+Two separate problems that get confused with each other.
+
+The first is **measuring one pipeline**: does it work, with evidence rather than spot-checking? That means a fixed set of representative questions (a "golden set") run through the real pipeline, each answer scored against a known-correct reference. The hard part isn't running the questions, it's *scoring* them — answers are full sentences ("Maya Chen currently works for Northwind Analytics. [1]") and a correct answer can be phrased many ways, so exact string matching would fail correct answers constantly. **LLM-as-judge** solves that with a second, separate LLM call whose only job is to decide whether the candidate answer conveys the same information as the reference — an automated stand-in for a human grader, at the cost of being fallible itself.
+
+The second is **comparing two pipelines**, and it needs more than the first. A single end-to-end score can't tell you *why* it moved, because retrieval and generation fail differently: an accuracy drop could mean the right chunk stopped being retrieved, or that it was retrieved and the model ignored it. Those are different bugs with different fixes. So a real comparison is layered:
+
+| Layer | Question it answers | Metric |
+|---|---|---|
+| Retrieval | Did the correct chunk reach top-k at all? | recall@k, MRR |
+| Context relevance | How much of what we retrieved was junk? | grader pass rate |
+| Groundedness | Is every claim supported by the retrieved text? | citation validity |
+| Answer correctness | Is the final answer right? | LLM-as-judge vs. reference |
+| Refusal | Does it decline when the document can't answer? | accuracy on unanswerable questions |
+
+**Retrieval sets a ceiling on everything downstream.** If recall@k is 0.6, no amount of prompt work gets past 60% — you'd be tuning the wrong stage. That's the single most important reason to measure per layer instead of end-to-end only.
+
+The comparison protocol itself: hold the question set, model, and prompt fixed, change **exactly one variable**, and compare **paired** results on the same questions — not two aggregate scores.
 
 **Where it lives**
-`eval/golden_set.py` — 25 question/source/reference-answer triples. `eval/judge.py::llm_as_judge()` — the scoring call. `eval/run_eval.py` — runs every golden-set question through the live `answer_question_graph()` (the same function `/query` calls), judges each, and prints a pass/fail summary.
+`eval/golden_set.py` — 25 question/source/reference-answer triples (12 against one document, 10 against another, 3 deliberately unanswerable). `eval/judge.py::llm_as_judge()` — the scoring call. `eval/run_eval.py` — runs every golden-set question through the live `answer_question_graph()` (the same function `/query` calls) and prints a pass/fail summary. Note that it deliberately calls the graph directly, **not** `answer_question_cached()` — if evaluation ran through the semantic cache, the second run onward would replay cached answers and report a perfect score while exercising nothing.
 
 **Why we chose it**
-Requirement: verify, with evidence rather than spot-checking a handful of manual queries, that grounding and retrieval actually hold across a representative spread of questions — including questions that should be refused, not just ones that should succeed.
-Choice: a small golden set (25 questions: 12 against one document, 10 against another, 3 deliberately unanswerable) scored by a dedicated LLM-as-judge call, built in two stages — the judging mechanism proven on 3 questions first (Unit 17), then scaled to 25 (Unit 18).
-Benefit: caught two real, different things. First, on the 3-question version: a wrong reference answer in the golden set itself (asked about a "free tier" that doesn't exist in the document) — the system was actually correct to refuse, but the eval initially reported it as a failure, which is exactly the kind of mistake that's invisible without checking reference answers against real source content. Second, on the full 25-question run: the judge correctly passed all 22 answerable questions (including ones with markdown formatting and the recurring full-width-bracket citation quirk) and all 3 unanswerable ones, giving actual evidence — not assumption — that grounding holds at this scale.
-Cost: LLM-as-judge is itself an LLM call, with the same reliability limits as everything else built on one — it can be wrong, inconsistent between runs, or biased toward agreeing with plausible-sounding answers. Nothing in this harness checks the judge's own correctness; that's a real, acknowledged limitation, not an oversight.
-Rejected alternative: string-similarity or substring scoring (exact match, or a metric like ROUGE) instead of a second LLM call. Rejected because DocMind's answers are natural sentences with citations, punctuation, and formatting that varies run to run even when the underlying fact is identical — a strict string metric would flag correct answers as failures constantly, which is worse than the judge's fallibility.
+Requirement: verify with evidence, across a representative spread of questions, that grounding and retrieval actually hold — and be able to tell whether a change to the pipeline made it better or worse.
+Choice: a 25-question golden set scored by a dedicated LLM-as-judge call, built in two stages (mechanism proven on 3 questions in Unit 17, scaled to 25 in Unit 18), then used as an A/B instrument by changing one variable at a time.
+Benefit: caught three real things. (1) A wrong reference answer *in the golden set itself* — a question about a "free tier" that doesn't exist in the document; the system was correct to refuse, and the eval reported the correct refusal as a failure. (2) Evidence, not assumption, that grounding holds at 25 questions including the 3 refusals. (3) A real A/B result: dropping `chunk_size` from 500 to 150 moved the score from **25/25 to 18/25**, same questions and same model, so the seven failures are attributable to chunking — and the mechanism was explainable, since smaller chunks split facts across boundaries so the answer wasn't present in any single chunk.
+Cost: the judge is itself an LLM call with the same reliability limits as everything else built on one, and nothing in the harness validates it. A full run costs ~39,000 tokens including the judge, so roughly 5 runs exhausts the free-tier daily quota — which is why a deterministic retrieval-level metric would be worth more than its accuracy alone suggests.
+Rejected alternative: string-similarity scoring (exact match, ROUGE) instead of a judge — rejected because answers are natural sentences with citations and formatting that vary run to run even when the fact is identical, so a strict string metric would flag correct answers as failures constantly, which is worse than the judge's fallibility. Also rejected for now: **pairwise** judging (show the judge both pipelines' answers and ask which is better). It is the stronger instrument for A/B specifically — LLM judges are more reliable at relative than absolute judgments — but it can't score a single pipeline in isolation, which was the first requirement.
 
 **Soundbite**
-"Testing this manually meant typing one question at a time and eyeballing the answer — that doesn't scale and isn't evidence. So I built a golden set of 25 real questions against my two uploaded documents, including three that should be refused, and scored every answer with a second LLM call that compares it to a known-correct reference instead of doing exact string matching, since correct answers are phrased differently every time. It actually caught a bug on the first try — not in the pipeline, in my own golden set. I'd written a reference answer that wasn't actually true of the document, and the eval flagged the system's correct 'I don't know' as a failure. I only caught that by going back and reading the real chunk content in Postgres before trusting the eval's verdict."
+"Early on I was only asking 'does the pipeline work' — type a question, eyeball the answer, move on. That's not evidence. So I built a golden set of 25 questions against my documents, each with a reference answer, including three that should be refused, and scored them with a second LLM call as a judge, because exact string matching fails correct answers that are just worded differently. To compare two configurations I hold the questions, model, and prompt fixed and change exactly one thing. I did that for chunk size — 500 characters scored 25/25, 150 scored 18/25, same questions, so the failures are attributable to chunking, and the mechanism made sense because small chunks split facts across boundaries. The part I'd stress is that I wouldn't trust the end-to-end number alone. Retrieval and generation fail differently, and retrieval recall is a ceiling on everything downstream — so if the score drops I want to know which stage moved before I touch a prompt. And I'd hold cost against it: I instrumented tokens per stage and found relevance grading was 70% of the cost per query, so two points of accuracy for triple the spend isn't obviously a win."
 
 **The gotcha**
-An eval is only as trustworthy as its reference answers, and nothing enforces that they're actually grounded in the real documents — a golden set is just as capable of being wrong as the system under test, and a failing eval doesn't automatically mean the *system* is broken. The fix here was manual and unglamorous: read the actual chunk content out of Postgres for every reference answer before trusting it, the same discipline used to trust any other test fixture. A second, quieter gotcha: LLM-as-judge grading everything as "correct" (or everything as "incorrect") would still produce a number that *looks* like a real eval score — the harness doesn't self-check for a degenerate judge, so a 25/25 or a 0/25 result should prompt a skim of the actual judge verdicts, not just trust in the aggregate count.
+Five, and the last two are the ones that separate a real answer from a rehearsed one.
+
+*An eval is only as trustworthy as its reference answers.* Nothing enforces that they're grounded in the real documents — a golden set is as capable of being wrong as the system under test, and a failing eval doesn't automatically mean the *system* is broken. The fix here was manual: read the actual chunk content out of Postgres for every reference answer before trusting it.
+
+*A degenerate judge still produces a number that looks like a score.* A judge grading everything "correct" yields 25/25 and nothing in the harness notices. A perfect or zero score should trigger a skim of the individual verdicts, not confidence.
+
+*The judge never sees the retrieved context.* `llm_as_judge()` takes only question, reference, and answer. So a question where retrieval fetched the **wrong** chunk but the model produced the right answer anyway scores PASS — the harness cannot distinguish "the pipeline worked" from "it got lucky." Only chunk-level retrieval labels close that gap, and this golden set doesn't have them yet.
+
+*Aggregate scores are the wrong comparison statistic; paired flips are the right one.* On 25 questions, 25-vs-24 is noise. What made the chunk-size result credible is that it was paired — same questions both runs — with **7 discordant pairs all in the same direction and 0 in the other**, which is an exact binomial p ≈ 0.016 two-sided. Reading *which* questions flipped is worth more than the count, because it tells you the mechanism.
+
+*And the confound in that very result: nothing sets `temperature`.* Generation, grading, and the judge all sample at the provider default, so the pipeline is stochastic and some of those 7 flips could be run-to-run variance rather than the chunk size. A rigorous version would pin `temperature=0` for eval runs, or run each configuration several times and compare distributions rather than single runs. Saying this out loud is stronger than quoting the clean number, because it shows you know what your own measurement does and doesn't establish.
 
 **Self-test**
 - Why does exact string matching fail as an eval strategy for a RAG system's answers specifically?
 - What's the concrete failure this project actually hit that proves "an eval can be wrong, not just the system"?
-- What are the two different, legitimate reasons a question in this golden set should return "I don't know," and why does testing more than one of them matter?
-- LLM-as-judge is itself an LLM call — what's the specific risk that introduces, and what would a degenerate (always-correct or always-incorrect) judge look like from the outside?
-- Why was the eval harness built and proven on 3 questions before writing all 25, instead of writing all 25 first?
+- What are the two different, legitimate reasons a question should return "I don't know," and why does testing more than one of them matter?
+- Why does `eval/run_eval.py` deliberately bypass the semantic cache? What would the eval report if it didn't?
+- Your judge never sees the retrieved chunks. Describe a specific case where the pipeline is broken and the eval still reports PASS.
+- Why is "retrieval recall is a ceiling" the most useful sentence in this section, and what wasted work does it prevent?
+- Pipeline A scores 24/25 and pipeline B scores 25/25 on this golden set. Have you proved B is better? What would you need to know first, and what would change your answer?
+- You have 7 questions flipping pass→fail and 0 flipping fail→pass. Why is that stronger evidence than "the score dropped by 7," and what does the missing `temperature` setting do to your confidence in it?
 
 ---
 
