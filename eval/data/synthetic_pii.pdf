@@ -1,0 +1,58 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 990 >>
+stream
+BT /F1 11 Tf 15 TL 50 790 Td
+(FICTIONAL TEST RECORD. Every person, number and address below is invented.) Tj T*
+() Tj T*
+(Employee profile: Ananya Kulkarni) Tj T*
+(Ananya Kulkarni is a data engineer at Tamarind Labs in Pune. She joined in 2022) Tj T*
+(and works on the Payments Data Platform team, where she maintains the LedgerLoom) Tj T*
+(reconciliation pipeline.) Tj T*
+() Tj T*
+(Contact details) Tj T*
+(Work email: ananya.kulkarni@tamarind.example) Tj T*
+(Personal email: ananya.k@example.com) Tj T*
+(Mobile: +91 90000 00001) Tj T*
+(Work phone \(New York office\): +1 212 555 0142) Tj T*
+() Tj T*
+(Identity documents) Tj T*
+(PAN: ABCPK1234Z) Tj T*
+(Aadhaar: 2345 6789 0123) Tj T*
+() Tj T*
+(Corporate card) Tj T*
+(Card number: 4111 1111 1111 1111, used only for team travel.) Tj T*
+() Tj T*
+(Reporting line) Tj T*
+(Her manager is Rohan Deshpande \(rohan.deshpande@tamarind.example\).) Tj T*
+() Tj T*
+(Emergency contact) Tj T*
+(Meera Kulkarni \(sister\), mobile +91 90000 00002.) Tj T*
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1352
+%%EOF

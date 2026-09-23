@@ -3,6 +3,7 @@ import re
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.llm_client import generate
+from services.pii import PLACEHOLDER_INSTRUCTION
 from services.vector_store import search
 
 CITATION_PATTERN = re.compile(r"\[(\d+)\]")
@@ -14,7 +15,7 @@ SYSTEM_PROMPT = (
     "in your answer, cite the source chunk number it came from using "
     "plain ASCII square brackets ONLY, exactly like [1] or [2] — never "
     "use any other bracket style (no full-width, no parentheses, no "
-    "superscript)."
+    "superscript). " + PLACEHOLDER_INSTRUCTION
 )
 
 

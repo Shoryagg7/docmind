@@ -13,6 +13,7 @@ from alembic.config import Config
 # Tests never talk to Groq. A fake key means an accidental real call fails with
 # 401 instead of silently spending the real quota.
 os.environ["GROQ_API_KEY"] = "test-key-never-sent"
+os.environ["PRIVACY_MODE"] = "minimize"
 
 from core.config import Settings  # noqa: E402  (must follow the env override)
 

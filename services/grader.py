@@ -1,8 +1,9 @@
 from services.llm_client import generate
+from services.pii import PLACEHOLDER_INSTRUCTION
 
 GRADER_SYSTEM_PROMPT = (
     "You judge whether a document excerpt is relevant to a question. "
-    "Reply with exactly one word: 'yes' or 'no'. Nothing else."
+    "Reply with exactly one word: 'yes' or 'no'. Nothing else. " + PLACEHOLDER_INSTRUCTION
 )
 
 

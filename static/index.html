@@ -126,6 +126,15 @@
   .empty { color: var(--ink-faint); font-size: 14px; text-align: center; padding: 22px; }
   .status { font-size: 13px; color: var(--ink-dim); margin-top: 8px; }
   .status--err { color: var(--err); }
+  .egress { margin-top: 10px; font-size: 13px; }
+  .egress summary { cursor: pointer; color: var(--ink-dim); }
+  .egress__facts { margin: 8px 0; color: var(--ink-dim); }
+  .egress__label { margin-top: 10px; font-weight: 600; font-size: 12px; }
+  .egress pre {
+    white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 8px; margin: 4px 0 0; font-size: 12px;
+  }
 </style>
 </head>
 <body>
@@ -136,8 +145,8 @@
       <h1>DocMind</h1>
       <button class="ghost" id="clear-chat" type="button">Clear chat</button>
     </div>
-    <p>Agentic RAG over your PDFs — retrieval, self-grading, bounded retry, and a semantic cache.
-       Every stage shown is a real node transition from the LangGraph run.</p>
+    <p>Privacy-aware agentic RAG over your PDFs. Personal data is replaced with placeholders
+       before anything is sent to the external LLM. Open "What left this machine" on any answer to see exactly what was sent.</p>
   </header>
 
   <div class="card">
@@ -252,6 +261,7 @@ function newTurn(question, scope) {
       <div class="turn__answer"></div>
       <div class="pills"></div>
       <details class="sources" hidden><summary>cited sources</summary><div class="sources__list"></div></details>
+      <details class="egress" hidden><summary>What left this machine</summary><div class="egress__body"></div></details>
     </div>`;
   turn.querySelector('.turn__q-text').textContent = question;
   turn.querySelector('.turn__scope').textContent = scope;
@@ -277,6 +287,53 @@ function addPill(turn, text, hit) {
   turn.querySelector('.pills').appendChild(el);
 }
 
+// Shows the egress record: what was sent to the external LLM, placeholders only.
+function renderEgress(turn, p, question) {
+  if (!p) return;
+  const box = turn.querySelector('details.egress');
+  const body = turn.querySelector('.egress__body');
+  box.hidden = false;
+  const entities = Object.entries(p.entities).map(([k, v]) => `${k} ×${v}`).join(', ') || 'none';
+  const facts = [
+    `mode: ${p.mode} · action: ${p.action ?? 'none (privacy off)'}`,
+    `hidden before sending: ${entities}`,
+    p.sent_in_clear.length ? `sent in clear with consent: ${p.sent_in_clear.join(', ')}` : '',
+    `placeholders restored locally: ${p.restored}`,
+    p.restore_failures.length ? `left unrestored (unknown/malformed): ${p.restore_failures.join(' ')}` : '',
+    `outbound LLM calls: ${p.calls.length}`,
+  ].filter(Boolean);
+  const factsEl = document.createElement('div');
+  factsEl.className = 'egress__facts';
+  factsEl.textContent = facts.join('\n');
+  factsEl.style.whiteSpace = 'pre-line';
+  body.appendChild(factsEl);
+
+  for (const call of p.calls) {
+    const label = document.createElement('div');
+    label.className = 'egress__label mono';
+    label.textContent = call.label;
+    const pre = document.createElement('pre');
+    pre.textContent = call.messages.join('\n\n--- next message ---\n\n');
+    body.append(label, pre);
+  }
+
+  if (p.action === 'REQUIRE_CONSENT' && !p.sent_in_clear.length) {
+    box.open = true;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = `Allow sending ${p.consent_types.join(', ')} in clear and ask again`;
+    btn.addEventListener('click', () => {
+      $('question').value = question;
+      allowSensitiveNext = true;
+      $('form').requestSubmit();
+    });
+    body.appendChild(btn);
+  }
+}
+
+// Set by the consent button; applies to the next question only.
+let allowSensitiveNext = false;
+
 $('clear-chat').addEventListener('click', () => {
   chatEl.innerHTML = '<div class="empty" id="empty">No questions yet — ask something above.</div>';
 });
@@ -297,8 +354,10 @@ $('form').addEventListener('submit', async (e) => {
     question,
     source: source || null,
     k: parseInt($('k').value, 10) || 3,
-    bypass_cache: $('bypass-cache').checked
+    bypass_cache: $('bypass-cache').checked,
+    allow_sensitive: allowSensitiveNext
   };
+  allowSensitiveNext = false;
 
   try {
     const res = await fetch('/query/stream', {
@@ -330,11 +389,14 @@ $('form').addEventListener('submit', async (e) => {
           answerEl.textContent += evt.text;
         } else if (evt.type === 'done') {
           const elapsed = ((performance.now() - started) / 1000).toFixed(2);
-          addPill(turn, evt.cached ? 'semantic cache HIT' : 'cache miss', evt.cached);
+          // No LLM calls and no hit: the privacy policy stopped the request before the cache.
+          addPill(turn, evt.cached ? 'semantic cache HIT' : evt.llm_calls ? 'cache miss' : 'cache not used', evt.cached);
           addPill(turn, `${elapsed}s`);
           addPill(turn, `${evt.llm_calls} LLM calls`);
           addPill(turn, `${evt.tokens} tokens`);
+          if (evt.privacy) addPill(turn, `privacy: ${evt.privacy.action ?? 'off'}`);
           stagesDetails.open = false;
+          renderEgress(turn, evt.privacy, question);
 
           if (evt.sources?.length) {
             const box = turn.querySelector('details.sources');

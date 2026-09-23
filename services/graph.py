@@ -1,14 +1,20 @@
 import operator
+from dataclasses import asdict
 from typing import Annotated, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.enums import PrivacyAction
+from core.errors import PrivacyBlockedError
 from core.models import Chunk
 from core.usage import logger as usage_logger
 from core.usage import start_request
 from services.grader import grade_relevance
+from services import pii
 from services.llm_client import generate
+from services.pii import PLACEHOLDER_INSTRUCTION
+from services.privacy_policy import BLOCK_MESSAGE, begin_request
 from services.rag import CITATION_PATTERN, SYSTEM_PROMPT
 from services.semantic_cache import get_cached_answer, set_cached_answer
 from services.vector_store import search
@@ -18,7 +24,8 @@ MAX_RETRIES = 2
 REWRITE_SYSTEM_PROMPT = (
     "You rewrite search queries that failed to retrieve relevant results. "
     "Given the original question, produce one rephrased version more likely to "
-    "match relevant document text. Reply with only the rewritten question, nothing else."
+    "match relevant document text. Reply with only the rewritten question, nothing else. "
+    + PLACEHOLDER_INSTRUCTION
 )
 
 
@@ -140,18 +147,41 @@ def filter_cited(answer: str, all_sources: list[dict]) -> list[dict]:
     return [s for s in all_sources if s["id"] in cited_ids] or all_sources
 
 
-async def answer_question_cached(
-    session: AsyncSession, query: str, k: int = 3, source: str | None = None
+async def answer_query(
+    session: AsyncSession,
+    query: str,
+    k: int = 3,
+    source: str | None = None,
+    allow_sensitive: bool = False,
+    use_cache: bool = True,
 ) -> dict:
+    """One request: privacy decision -> semantic cache -> graph. Used by /query and eval."""
     totals = start_request()
+    decision = begin_request(query, allow_sensitive)
+    egress = pii.current().record
 
-    cached = await get_cached_answer(query, source=source)
-    if cached is not None:
-        usage_logger.info("request cached=True llm_calls=0 tokens=0")
-        return {**cached, "cached": True, "tokens": 0, "llm_calls": 0}
+    if decision.stops_request:
+        return _response(decision.message(), [], totals, egress)
 
-    result = await answer_question_graph(session, query, k=k, source=source)
-    await set_cached_answer(query, result, source=source)
+    # Consent answers never touch the cache. Otherwise a later paraphrase asked
+    # WITHOUT consent could be served an answer that depended on it.
+    use_cache = use_cache and not decision.consent_given
+
+    if use_cache:
+        cached = await get_cached_answer(query, source=source)
+        if cached is not None:
+            usage_logger.info("request cached=True llm_calls=0 tokens=0")
+            return {**_response(cached["answer"], cached["sources"], totals, egress), "cached": True}
+
+    try:
+        result = await answer_question_graph(session, query, k=k, source=source)
+    except PrivacyBlockedError:
+        egress.action = PrivacyAction.BLOCK
+        return _response(BLOCK_MESSAGE, [], totals, egress)
+
+    if use_cache:
+        # Stored after restore: the cache lives inside the privacy boundary.
+        await set_cached_answer(query, result, source=source)
 
     usage_logger.info(
         "request cached=False llm_calls=%d tokens=%d (%.2f%% of daily free-tier quota)",
@@ -159,9 +189,15 @@ async def answer_question_cached(
         totals.total_tokens,
         totals.percent_of_daily_quota,
     )
+    return _response(result["answer"], result["sources"], totals, egress)
+
+
+def _response(answer: str, sources: list[dict], totals, egress) -> dict:
     return {
-        **result,
+        "answer": answer,
+        "sources": sources,
         "cached": False,
         "tokens": totals.total_tokens,
         "llm_calls": totals.calls,
+        "privacy": asdict(egress),
     }

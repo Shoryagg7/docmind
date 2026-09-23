@@ -6,6 +6,8 @@ class QueryRequest(BaseModel):
     k: int = 3
     source: str | None = None
     bypass_cache: bool = False
+    # Consent to send the sensitive values this question is about in clear.
+    allow_sensitive: bool = False
 
     @field_validator("source")
     @classmethod
@@ -27,3 +29,5 @@ class QueryResponse(BaseModel):
     cached: bool = False
     tokens: int = 0
     llm_calls: int = 0
+    # Egress record: what left the machine (placeholders only, never raw values).
+    privacy: dict | None = None

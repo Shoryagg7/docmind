@@ -1,14 +1,19 @@
 import json
+from dataclasses import asdict
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db import get_session
+from core.enums import PrivacyAction
+from core.errors import PrivacyBlockedError
 from core.usage import current, start_request
 from schemas.query import QueryRequest
 from services.graph import build_context, build_graph, filter_cited, initial_state
+from services import pii
 from services.llm_client import generate_stream
+from services.privacy_policy import BLOCK_MESSAGE, begin_request
 from services.rag import SYSTEM_PROMPT
 from services.semantic_cache import get_cached_answer, set_cached_answer
 
@@ -26,38 +31,62 @@ def sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
+def done_event(totals, cached: bool = False, sources: list | None = None) -> str:
+    return sse(
+        {
+            "type": "done",
+            "cached": cached,
+            "sources": sources or [],
+            "tokens": 0 if cached else totals.total_tokens,
+            "llm_calls": 0 if cached else totals.calls,
+            "privacy": asdict(pii.current().record),
+        }
+    )
+
+
 async def event_stream(session: AsyncSession, request: QueryRequest):
     totals = start_request()
+    decision = begin_request(request.question, request.allow_sensitive)
+
+    if decision.stops_request:
+        yield sse({"type": "stage", "stage": "privacy", "detail": decision.action})
+        yield sse({"type": "token", "text": decision.message()})
+        yield done_event(totals)
+        return
+
+    # Consent answers never touch the cache (see services/graph.py::answer_query).
+    use_cache = not decision.consent_given
 
     cached = (
-        None
-        if request.bypass_cache
-        else await get_cached_answer(request.question, source=request.source)
+        await get_cached_answer(request.question, source=request.source)
+        if use_cache and not request.bypass_cache
+        else None
     )
     if cached is not None:
         yield sse({"type": "stage", "stage": "cache", "detail": "Semantic cache hit"})
         yield sse({"type": "token", "text": cached["answer"]})
-        yield sse(
-            {
-                "type": "done",
-                "cached": True,
-                "sources": cached.get("sources", []),
-                "tokens": 0,
-                "llm_calls": 0,
-            }
-        )
+        yield done_event(totals, cached=True, sources=cached.get("sources", []))
         return
 
     yield sse(
         {
             "type": "stage",
             "stage": "cache",
-            "detail": "Cache bypassed — running pipeline"
-            if request.bypass_cache
-            else "Cache miss — running pipeline",
+            "detail": "Cache miss — running pipeline" if use_cache and not request.bypass_cache
+            else "Cache skipped — running pipeline",
         }
     )
 
+    try:
+        async for event in _pipeline(session, request, totals, cache_answer=use_cache):
+            yield event
+    except PrivacyBlockedError:
+        pii.current().record.action = PrivacyAction.BLOCK
+        yield sse({"type": "token", "text": BLOCK_MESSAGE})
+        yield done_event(totals)
+
+
+async def _pipeline(session: AsyncSession, request: QueryRequest, totals, cache_answer: bool):
     graph = build_graph(session)
     state = initial_state(request.question, request.k, request.source, defer_generation=True)
     final_state = None
@@ -80,17 +109,8 @@ async def event_stream(session: AsyncSession, request: QueryRequest):
     chunks = (final_state or {}).get("relevant_chunks", [])
 
     if not chunks:
-        answer = "I don't know — no relevant documents found."
-        yield sse({"type": "token", "text": answer})
-        yield sse(
-            {
-                "type": "done",
-                "cached": False,
-                "sources": [],
-                "tokens": totals.total_tokens,
-                "llm_calls": totals.calls,
-            }
-        )
+        yield sse({"type": "token", "text": "I don't know — no relevant documents found."})
+        yield done_event(totals)
         return
 
     context, all_sources = build_context(chunks)
@@ -102,20 +122,13 @@ async def event_stream(session: AsyncSession, request: QueryRequest):
         yield sse({"type": "token", "text": piece})
 
     sources = filter_cited(answer, all_sources)
-    await set_cached_answer(
-        request.question, {"answer": answer, "sources": sources}, source=request.source
-    )
+    if cache_answer:
+        # Stored after restore: the cache lives inside the privacy boundary.
+        await set_cached_answer(
+            request.question, {"answer": answer, "sources": sources}, source=request.source
+        )
 
-    totals = current() or totals
-    yield sse(
-        {
-            "type": "done",
-            "cached": False,
-            "sources": sources,
-            "tokens": totals.total_tokens,
-            "llm_calls": totals.calls,
-        }
-    )
+    yield done_event(current() or totals, sources=sources)
 
 
 @router.post("/query/stream")

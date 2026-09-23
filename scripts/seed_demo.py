@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEMO_DOCS = [
     ROOT / "tests" / "fixtures" / "sample.pdf",
     ROOT / "tests" / "fixtures" / "sample2.pdf",
+    ROOT / "eval" / "data" / "synthetic_pii.pdf",
 ]
 
 
