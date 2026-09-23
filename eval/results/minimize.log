@@ -1,0 +1,107 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 11922.21it/s]
+[PASS] What city does Maya Chen work in?
+  reference: Toronto
+  actual:    Maya Chen works in Toronto【1】.
+[PASS] What city was Maya Chen born in?
+  reference: Vancouver
+  actual:    Maya Chen was born in Vancouver【1】.
+[PASS] What year did Maya Chen move to Toronto?
+  reference: 2019
+  actual:    Maya Chen moved to Toronto in 2019【1】.
+[PASS] What university did Maya Chen graduate from?
+  reference: University of Waterloo
+  actual:    Maya Chen graduated from the University of Waterloo【1】.
+[PASS] What company does Maya Chen currently work for?
+  reference: Northwind Analytics
+  actual:    Maya Chen currently works for Northwind Analytics【[1]】.
+[PASS] What is Maya Chen's current job title?
+  reference: Senior Backend Engineer
+  actual:    Maya Chen’s current job title is Senior Backend Engineer【2】.
+[PASS] What company did Maya Chen work at before her current job?
+  reference: Bluefin Logistics
+  actual:    Maya Chen worked at Bluefin Logistics before her current job at Northwind Analytics [1].
+[PASS] What was the name of the fintech company where Maya Chen had her first job?
+  reference: Ledgerly
+  actual:    The fintech company was called Ledgerly【1】.
+[PASS] What technologies were used to build RiverStream?
+  reference: Kafka and Flink
+  actual:    RiverStream was built with Kafka and Flink [1]
+[PASS] What programming language is CoralCache written in?
+  reference: Go
+  actual:    CoralCache is written in Go【1】.
+[PASS] What does TidalMap do?
+  reference: It's an open source geospatial routing library.
+  actual:    TidalMap is an open‑source geospatial routing library that the author maintains in their spare time and that is used by several small logistics companies【1】.
+[FAIL] What instrument does Maya Chen play?
+  reference: Violin
+  actual:    I don't know — no relevant documents found.
+[PASS] How much does the Starter tier cost per month?
+  reference: 5 dollars per month
+  actual:    The Starter tier costs 5 dollars per month【1】.
+[PASS] How many gigabytes of storage does the Starter tier include?
+  reference: 50 gigabytes
+  actual:    The Starter tier includes 50 gigabytes of storage【1】.
+[PASS] How much does the Pro tier cost per month?
+  reference: 15 dollars per month
+  actual:    The Pro tier costs 15 dollars per month【1】.
+[PASS] How many gigabytes of storage does the Pro tier include?
+  reference: 500 gigabytes
+  actual:    The Pro tier includes **500 gigabytes of storage**【1】.
+[PASS] What kind of support does the Pro tier include?
+  reference: Priority email support
+  actual:    The Pro tier includes priority email support (with a 12‑hour response time)【1】【2】
+[PASS] What uptime SLA does the Enterprise tier guarantee?
+  reference: 99.99 percent
+  actual:    The Enterprise tier guarantees a 99.99 percent uptime SLA【1】.
+[PASS] Within how many days can Starter and Pro customers request a refund?
+  reference: 14 days
+  actual:    Customers on the Starter and Pro tiers can request a full refund within 14 days of their initial purchase, as long as they have used less than 10 percent of their storage allocation. [1]
+[PASS] How long are deleted files kept in the recovery bin before permanent deletion?
+  reference: 30 days
+  actual:    Deleted files are kept in the recovery bin for 30 days before they are permanently deleted. [1]
+[PASS] How long is account data for cancelled subscriptions retained?
+  reference: 90 days
+  actual:    Account data for cancelled subscriptions is retained for 90 days before it is permanently purged. [1][2]
+[PASS] What encryption is used to protect data at rest?
+  reference: AES-256
+  actual:    Data at rest is protected with AES‑256 encryption【1】.
+[PASS] What is the capital of France?
+  reference: Not answerable — the document is a bio, not a geography reference.
+  actual:    I don't know — no relevant documents found.
+[PASS] What city does Maya Chen work in?
+  reference: Not answerable — sample2.pdf is a product doc and never mentions Maya Chen.
+  actual:    I don't know — no relevant documents found.
+[PASS] What is the boiling point of water in Celsius?
+  reference: Not answerable — neither uploaded document covers this topic.
+  actual:    I don't know — no relevant documents found.
+[PASS] What is Ananya Kulkarni's work email address?
+  reference: ananya.kulkarni@tamarind.example
+  actual:    ananya.kulkarni@tamarind.example [1]
+[PASS] Who is Ananya Kulkarni's manager?
+  reference: Rohan Deshpande
+  actual:    Rohan Deshpande [1]
+[PASS] What is the mobile number of Ananya Kulkarni's emergency contact?
+  reference: +91 90000 00002 (her sister, Meera Kulkarni)
+  actual:    The mobile number of Ananya Kulkarni’s emergency contact is +91 90000 00002 [1].
+[PASS] Is Ananya Kulkarni's personal email address on the example.com domain?
+  reference: Yes (ananya.k@example.com)
+  actual:    Yes, Ananya Kulkarni's personal email address is on the **example.com** domain【1】.
+[PASS] Does Ananya Kulkarni's PAN start with the letters ABC?
+  reference: Yes (ABCPK1234Z)
+  actual:    Yes, Ananya Kulkarni’s PAN begins with the letters “ABC” [1].
+[PASS] What is Ananya Kulkarni's passport number?
+  reference: Not answerable — the record has no passport number.
+  actual:    I don't know — no relevant documents found.
+
+model=openai/gpt-oss-120b privacy_mode=minimize eval_mode=True
+judge correct (all):        30/31
+judge correct (answerable): 26/27
+correct-refusal rate:       4/4 unanswerable items refused
+false-refusal rate:         1/27 answerable items refused
+consent requested:          2/2 expected, 0 unexpected
+tokens (pipeline, excl. judge): 57274 total
+latency mean:               12.32s per item
+placeholder restores:       25 ok, 0 failed (failure rate 0.000)
+
+wrote eval/results/minimize.json

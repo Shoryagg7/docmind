@@ -1,0 +1,583 @@
+INFO sentence_transformers.base.model No device provided, using cpu
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING huggingface_hub.utils._http Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO sentence_transformers.base.model Loading SentenceTransformer model from sentence-transformers/all-MiniLM-L6-v2.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 16054.01it/s]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 62.09it/s]
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=285 completion=75 total=360
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=282 completion=75 total=357
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=65 total=352
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=336 completion=63 total=399
+INFO docmind.usage request cached=False llm_calls=4 tokens=1468 (0.73% of daily free-tier quota)
+INFO presidio-analyzer Created NLP engine: spacy. Loaded models: ['en']
+INFO presidio-analyzer registry not provided, creating default.
+INFO presidio-analyzer Loaded recognizer: CreditCardRecognizer
+INFO presidio-analyzer Loaded recognizer: CreditCardRecognizer
+INFO presidio-analyzer Loaded recognizer: CreditCardRecognizer
+INFO presidio-analyzer Loaded recognizer: CreditCardRecognizer
+INFO presidio-analyzer Loaded recognizer: UsBankRecognizer
+INFO presidio-analyzer Loaded recognizer: UsLicenseRecognizer
+INFO presidio-analyzer Loaded recognizer: UsItinRecognizer
+INFO presidio-analyzer Loaded recognizer: UsPassportRecognizer
+INFO presidio-analyzer Loaded recognizer: UsSsnRecognizer
+INFO presidio-analyzer Loaded recognizer: NhsRecognizer
+INFO presidio-analyzer Loaded recognizer: EsNifRecognizer
+INFO presidio-analyzer Loaded recognizer: EsNieRecognizer
+INFO presidio-analyzer Loaded recognizer: ItDriverLicenseRecognizer
+INFO presidio-analyzer Loaded recognizer: ItFiscalCodeRecognizer
+INFO presidio-analyzer Loaded recognizer: ItVatCodeRecognizer
+INFO presidio-analyzer Loaded recognizer: ItIdentityCardRecognizer
+INFO presidio-analyzer Loaded recognizer: ItPassportRecognizer
+INFO presidio-analyzer Loaded recognizer: PlPeselRecognizer
+INFO presidio-analyzer Loaded recognizer: CryptoRecognizer
+INFO presidio-analyzer Loaded recognizer: DateRecognizer
+INFO presidio-analyzer Loaded recognizer: EmailRecognizer
+INFO presidio-analyzer Loaded recognizer: IbanRecognizer
+INFO presidio-analyzer Loaded recognizer: IpRecognizer
+INFO presidio-analyzer Loaded recognizer: MedicalLicenseRecognizer
+INFO presidio-analyzer Loaded recognizer: MacAddressRecognizer
+INFO presidio-analyzer Loaded recognizer: PhoneRecognizer
+INFO presidio-analyzer Loaded recognizer: UrlRecognizer
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - CreditCardRecognizer supported languages: es, registry supported languages: en
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - CreditCardRecognizer supported languages: it, registry supported languages: en
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - CreditCardRecognizer supported languages: pl, registry supported languages: en
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - EsNifRecognizer supported languages: es, registry supported languages: en
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - EsNieRecognizer supported languages: es, registry supported languages: en
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - ItDriverLicenseRecognizer supported languages: it, registry supported languages: en
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - ItFiscalCodeRecognizer supported languages: it, registry supported languages: en
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - ItVatCodeRecognizer supported languages: it, registry supported languages: en
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - ItIdentityCardRecognizer supported languages: it, registry supported languages: en
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - ItPassportRecognizer supported languages: it, registry supported languages: en
+WARNING presidio-analyzer Recognizer not added to registry because language is not supported by registry - PlPeselRecognizer supported languages: pl, registry supported languages: en
+INFO presidio-analyzer Loaded recognizer: SpacyRecognizer
+INFO presidio-analyzer Loaded recognizer: docmind_email
+INFO presidio-analyzer Loaded recognizer: docmind_in_pan
+INFO presidio-analyzer Loaded recognizer: docmind_in_aadhaar
+INFO presidio-analyzer Loaded recognizer: docmind_in_phone
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=161 completion=64 total=225
+[PASS] What city does Maya Chen work in?
+  reference: Toronto
+  actual:    Maya Chen works in Toronto【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 194.59it/s]
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=285 completion=59 total=344
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=282 completion=73 total=355
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=63 total=350
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=336 completion=51 total=387
+INFO docmind.usage request cached=False llm_calls=4 tokens=1436 (0.72% of daily free-tier quota)
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=162 completion=66 total=228
+[PASS] What city was Maya Chen born in?
+  reference: Vancouver
+  actual:    Maya Chen was born in Vancouver【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 172.46it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=286 completion=58 total=344
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=66 total=354
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=283 completion=79 total=362
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=337 completion=71 total=408
+INFO docmind.usage request cached=False llm_calls=4 tokens=1468 (0.73% of daily free-tier quota)
+WARNING presidio-analyzer Entity CARDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=168 completion=55 total=223
+[PASS] What year did Maya Chen move to Toronto?
+  reference: 2019
+  actual:    Maya Chen moved to Toronto in 2019【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 172.41it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=285 completion=64 total=349
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=70 total=357
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=282 completion=78 total=360
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=336 completion=70 total=406
+INFO docmind.usage request cached=False llm_calls=4 tokens=1472 (0.74% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=166 completion=55 total=221
+[PASS] What university did Maya Chen graduate from?
+  reference: University of Waterloo
+  actual:    Maya Chen graduated from the University of Waterloo【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 167.87it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=286 completion=70 total=356
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=283 completion=70 total=353
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=69 total=357
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=339 completion=200 total=539
+INFO docmind.usage request cached=False llm_calls=4 tokens=1605 (0.80% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=156 completion=50 total=206
+[FAIL] What company does Maya Chen currently work for?
+  reference: Northwind Analytics
+  actual:    I don't know.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 154.03it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=286 completion=85 total=371
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=104 total=392
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=283 completion=86 total=369
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=443 completion=93 total=536
+INFO docmind.usage request cached=False llm_calls=4 tokens=1668 (0.83% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=172 completion=60 total=232
+[PASS] What is Maya Chen's current job title?
+  reference: Senior Backend Engineer
+  actual:    Maya Chen’s current job title is **Senior Backend Engineer**【2】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 139.74it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=289 completion=70 total=359
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=291 completion=100 total=391
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=286 completion=114 total=400
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=342 completion=199 total=541
+INFO docmind.usage request cached=False llm_calls=4 tokens=1691 (0.85% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=179 completion=87 total=266
+[PASS] What company did Maya Chen work at before her current job?
+  reference: Bluefin Logistics
+  actual:    Maya Chen worked at **Bluefin Logistics** before her current position at Northwind Analytics【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 125.30it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=293 completion=78 total=371
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=295 completion=84 total=379
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=290 completion=87 total=377
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=341 completion=90 total=431
+INFO docmind.usage request cached=False llm_calls=4 tokens=1558 (0.78% of daily free-tier quota)
+WARNING presidio-analyzer Entity ORDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+WARNING presidio-analyzer Entity ORDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=179 completion=74 total=253
+[PASS] What was the name of the fintech company where Maya Chen had her first job?
+  reference: Ledgerly
+  actual:    Maya Chen’s first job was at a fintech company called Ledgerly【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 187.67it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=283 completion=79 total=362
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=289 completion=85 total=374
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=266 completion=114 total=380
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=334 completion=87 total=421
+INFO docmind.usage request cached=False llm_calls=4 tokens=1537 (0.77% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=184 completion=92 total=276
+[PASS] What technologies were used to build RiverStream?
+  reference: Kafka and Flink
+  actual:    RiverStream was built using **Kafka** and **Flink** as its core technologies【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 203.28it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=283 completion=79 total=362
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=266 completion=66 total=332
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=286 completion=71 total=357
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=334 completion=71 total=405
+INFO docmind.usage request cached=False llm_calls=4 tokens=1456 (0.73% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=157 completion=50 total=207
+[PASS] What programming language is CoralCache written in?
+  reference: Go
+  actual:    CoralCache is written in Go【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 162.00it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=94 total=381
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=281 completion=67 total=348
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=264 completion=59 total=323
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=338 completion=121 total=459
+INFO docmind.usage request cached=False llm_calls=4 tokens=1511 (0.76% of daily free-tier quota)
+WARNING presidio-analyzer Entity CARDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=184 completion=127 total=311
+[PASS] What does TidalMap do?
+  reference: It's an open source geospatial routing library.
+  actual:    TidalMap is an open‑source geospatial routing library that the author maintains in spare time and that is used by several small logistics companies【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 193.80it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=284 completion=65 total=349
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=264 completion=142 total=406
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=65 total=352
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=315 completion=100 total=415
+INFO docmind.usage request cached=False llm_calls=4 tokens=1522 (0.76% of daily free-tier quota)
+WARNING presidio-analyzer Entity WORK_OF_ART is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=161 completion=58 total=219
+[PASS] What instrument does Maya Chen play?
+  reference: Violin
+  actual:    Maya Chen plays the violin【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 209.36it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=64 total=352
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=64 total=352
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=285 completion=70 total=355
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=339 completion=62 total=401
+INFO docmind.usage request cached=False llm_calls=4 tokens=1460 (0.73% of daily free-tier quota)
+WARNING presidio-analyzer Entity MONEY is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+WARNING presidio-analyzer Entity MONEY is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=175 completion=61 total=236
+[PASS] How much does the Starter tier cost per month?
+  reference: 5 dollars per month
+  actual:    The Starter tier costs 5 dollars per month【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 119.60it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=290 completion=65 total=355
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=97 total=384
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=290 completion=77 total=367
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=341 completion=91 total=432
+INFO docmind.usage request cached=False llm_calls=4 tokens=1538 (0.77% of daily free-tier quota)
+WARNING presidio-analyzer Entity CARDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+WARNING presidio-analyzer Entity CARDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=177 completion=61 total=238
+[PASS] How many gigabytes of storage does the Starter tier include?
+  reference: 50 gigabytes
+  actual:    The Starter tier includes **50 gigabytes** of storage【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 180.66it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=60 total=348
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=80 total=368
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=285 completion=67 total=352
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=339 completion=62 total=401
+INFO docmind.usage request cached=False llm_calls=4 tokens=1469 (0.73% of daily free-tier quota)
+WARNING presidio-analyzer Entity MONEY is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+WARNING presidio-analyzer Entity MONEY is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=167 completion=57 total=224
+[PASS] How much does the Pro tier cost per month?
+  reference: 15 dollars per month
+  actual:    The Pro tier costs 15 dollars per month【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 168.81it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=290 completion=63 total=353
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=97 total=384
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=290 completion=70 total=360
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=341 completion=77 total=418
+INFO docmind.usage request cached=False llm_calls=4 tokens=1515 (0.76% of daily free-tier quota)
+WARNING presidio-analyzer Entity CARDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+WARNING presidio-analyzer Entity CARDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=169 completion=50 total=219
+[PASS] How many gigabytes of storage does the Pro tier include?
+  reference: 500 gigabytes
+  actual:    The Pro tier includes **500 gigabytes of storage**【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 172.39it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=91 total=379
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=86 total=374
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=285 completion=70 total=355
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=444 completion=201 total=645
+INFO docmind.usage request cached=False llm_calls=4 tokens=1753 (0.88% of daily free-tier quota)
+WARNING presidio-analyzer Entity CARDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=192 completion=72 total=264
+[PASS] What kind of support does the Pro tier include?
+  reference: Priority email support
+  actual:    The Pro tier provides **priority email support** (with a typical 12‑hour response time)【1】. It is also mentioned as part of the Pro offering in the product overview【2】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 162.12it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=61 total=348
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=77 total=364
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=284 completion=60 total=344
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=338 completion=84 total=422
+INFO docmind.usage request cached=False llm_calls=4 tokens=1478 (0.74% of daily free-tier quota)
+WARNING presidio-analyzer Entity PERCENT is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+WARNING presidio-analyzer Entity PERCENT is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=168 completion=55 total=223
+[PASS] What uptime SLA does the Enterprise tier guarantee?
+  reference: 99.99 percent
+  actual:    The Enterprise tier guarantees a 99.99 percent uptime SLA【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 158.93it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=82 total=370
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=291 completion=69 total=360
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=291 completion=202 total=493
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=339 completion=110 total=449
+INFO docmind.usage request cached=False llm_calls=4 tokens=1672 (0.84% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=175 completion=57 total=232
+[PASS] Within how many days can Starter and Pro customers request a refund?
+  reference: 14 days
+  actual:    Starter and Pro customers can request a full refund within 14 days of their initial purchase【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 123.42it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=289 completion=78 total=367
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=292 completion=75 total=367
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=235 completion=73 total=308
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=340 completion=98 total=438
+INFO docmind.usage request cached=False llm_calls=4 tokens=1480 (0.74% of daily free-tier quota)
+WARNING presidio-analyzer Entity CARDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=176 completion=66 total=242
+[PASS] How long are deleted files kept in the recovery bin before permanent deletion?
+  reference: 30 days
+  actual:    Deleted files are kept in the recovery bin for 30 days before they are permanently deleted. [1]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 174.47it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=285 completion=68 total=353
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=90 total=378
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=71 total=359
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=441 completion=128 total=569
+INFO docmind.usage request cached=False llm_calls=4 tokens=1659 (0.83% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=174 completion=59 total=233
+[PASS] How long is account data for cancelled subscriptions retained?
+  reference: 90 days
+  actual:    Account data for cancelled subscriptions is retained for 90 days before it is permanently purged. [1][2]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 176.51it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=231 completion=65 total=296
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=61 total=349
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=73 total=361
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=387 completion=117 total=504
+INFO docmind.usage request cached=False llm_calls=4 tokens=1510 (0.76% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=164 completion=55 total=219
+[PASS] What encryption is used to protect data at rest?
+  reference: AES-256
+  actual:    Data at rest is protected with AES‑256 encryption【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 183.33it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=54 total=341
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=286 completion=55 total=341
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=264 completion=51 total=315
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=rewrite prompt=182 completion=73 total=255
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 115.31it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=61 total=349
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=60 total=347
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=265 completion=81 total=346
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=rewrite prompt=183 completion=59 total=242
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 165.66it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=288 completion=60 total=348
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=57 total=344
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=265 completion=80 total=345
+INFO docmind.usage request cached=False llm_calls=11 tokens=3573 (1.79% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=167 completion=110 total=277
+[PASS] What is the capital of France?
+  reference: Not answerable — the document is a bio, not a geography reference.
+  actual:    I don't know — no relevant documents found.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 172.78it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=229 completion=68 total=297
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=286 completion=59 total=345
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=283 completion=56 total=339
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=rewrite prompt=183 completion=104 total=287
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 175.73it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=229 completion=69 total=298
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=286 completion=66 total=352
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=283 completion=62 total=345
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=rewrite prompt=183 completion=84 total=267
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 173.46it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=229 completion=68 total=297
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=286 completion=58 total=344
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=283 completion=56 total=339
+INFO docmind.usage request cached=False llm_calls=11 tokens=3510 (1.75% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=176 completion=108 total=284
+[PASS] What city does Maya Chen work in?
+  reference: Not answerable — sample2.pdf is a product doc and never mentions Maya Chen.
+  actual:    I don't know — no relevant documents found.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 167.48it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=290 completion=54 total=344
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=323 completion=58 total=381
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=59 total=346
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=rewrite prompt=185 completion=68 total=253
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 77.70it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=287 completion=63 total=350
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=323 completion=60 total=383
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=290 completion=54 total=344
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=rewrite prompt=185 completion=66 total=251
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 110.27it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=291 completion=55 total=346
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=324 completion=59 total=383
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=268 completion=48 total=316
+INFO docmind.usage request cached=False llm_calls=11 tokens=3697 (1.85% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=170 completion=70 total=240
+[PASS] What is the boiling point of water in Celsius?
+  reference: Not answerable — neither uploaded document covers this topic.
+  actual:    I don't know — no relevant documents found.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 147.12it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=325 completion=67 total=392
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=292 completion=76 total=368
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=376 completion=69 total=445
+INFO docmind.usage request cached=False llm_calls=3 tokens=1205 (0.60% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=174 completion=88 total=262
+[PASS] What is Ananya Kulkarni's work email address?
+  reference: ananya.kulkarni@tamarind.example
+  actual:    Ananya Kulkarni's work email address is **ananya.kulkarni@tamarind.example**【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 59.71it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=323 completion=64 total=387
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=290 completion=72 total=362
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=341 completion=91 total=432
+INFO docmind.usage request cached=False llm_calls=3 tokens=1181 (0.59% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=169 completion=80 total=249
+[PASS] Who is Ananya Kulkarni's manager?
+  reference: Rohan Deshpande
+  actual:    Ananya Kulkarni’s manager is Rohan Deshpande【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 63.45it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=328 completion=64 total=392
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=295 completion=88 total=383
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=346 completion=127 total=473
+INFO docmind.usage request cached=False llm_calls=3 tokens=1248 (0.62% of daily free-tier quota)
+WARNING presidio-analyzer Entity CARDINAL is not mapped to a Presidio entity, but keeping anyway. Add to `NerModelConfiguration.labels_to_ignore` to remove.
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=195 completion=311 total=506
+[FAIL] What is the mobile number of Ananya Kulkarni's emergency contact?
+  reference: +91 90000 00002 (her sister, Meera Kulkarni)
+  actual:    The mobile number of Ananya Kulkarni's emergency contact is +91 90000 00002【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 133.64it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=329 completion=77 total=406
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=296 completion=103 total=399
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=380 completion=92 total=472
+INFO docmind.usage request cached=False llm_calls=3 tokens=1277 (0.64% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=182 completion=76 total=258
+[PASS] Is Ananya Kulkarni's personal email address on the example.com domain?
+  reference: Yes (ananya.k@example.com)
+  actual:    Yes, her personal email address is on the **example.com** domain (ananya.k@example.com)【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 124.49it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=327 completion=63 total=390
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=294 completion=60 total=354
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=generate prompt=485 completion=131 total=616
+INFO docmind.usage request cached=False llm_calls=3 tokens=1360 (0.68% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=195 completion=132 total=327
+[PASS] Does Ananya Kulkarni's PAN start with the letters ABC?
+  reference: Yes (ABCPK1234Z)
+  actual:    Yes, Ananya Kulkarni’s PAN begins with “ABC” — it is listed as **ABCPK1234Z**【1】.
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 165.78it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=324 completion=64 total=388
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=291 completion=72 total=363
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=rewrite prompt=186 completion=95 total=281
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 162.10it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=292 completion=74 total=366
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=325 completion=80 total=405
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=rewrite prompt=187 completion=251 total=438
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 145.78it/s]
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=327 completion=53 total=380
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=grade prompt=294 completion=78 total=372
+INFO docmind.usage request cached=False llm_calls=8 tokens=2993 (1.50% of daily free-tier quota)
+INFO groq._base_client Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+INFO docmind.usage llm_call model=openai/gpt-oss-120b label=judge prompt=167 completion=91 total=258
+[PASS] What is Ananya Kulkarni's passport number?
+  reference: Not answerable — the record has no passport number.
+  actual:    I don't know — no relevant documents found.
+
+model=openai/gpt-oss-120b privacy_mode=off eval_mode=True
+judge correct (all):        29/31
+judge correct (answerable): 25/27
+correct-refusal rate:       4/4 unanswerable items refused
+false-refusal rate:         1/27 answerable items refused
+consent requested:          0/2 expected, 0 unexpected
+tokens (pipeline, excl. judge): 53970 total
+latency mean:               12.03s per item
+placeholder restores:       0 ok, 0 failed (failure rate 0.000)
+
+wrote eval/results/off.json

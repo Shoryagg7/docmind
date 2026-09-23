@@ -134,3 +134,53 @@ Each entry: **decision / alternatives / why / cost.** Simplest workable option u
 - **Alternatives:** keep `rag.py` as a "straight-line baseline for comparison".
 - **Why:** no route, eval or test called either module (`rag.answer_question` or the exact-match `cache.py`). Dead code is one more thing to explain and to keep inside the privacy gate. Git history still has both.
 - **Cost:** there's no runnable non-agentic baseline to compare against.
+
+## Evaluation
+
+### `EVAL_MODE=1` pins temperature 0 at the gate
+- **Decision:** `llm_client._sampling()` adds `temperature=0` to every call when `EVAL_MODE` is set, so it covers generate, grade, rewrite and the judge from one place.
+- **Alternatives:** a temperature argument at each call site.
+- **Why:** one switch, and no call site can be missed. Tested in `tests/test_eval_tools.py`.
+- **Cost:** temperature 0 reduces variance but doesn't guarantee identical outputs from a hosted model, so run-to-run noise is smaller but not zero.
+
+### Retrieval scored by evidence substrings, first retrieval only
+- **Decision:** each answerable golden item has an `evidence` string. recall@k and MRR count the rank of the first retrieved chunk that contains it. The script verifies every evidence string exists in the DB and exits otherwise.
+- **Alternatives:** chunk-id labels (they break whenever chunking changes); an LLM relevance judge (costs quota and adds its own noise).
+- **Why:** deterministic, free, and it survives re-ingestion.
+- **Cost:** it measures the first vector search only, not the rewrite retries. With 2–5 chunks per document, recall@3 is close to trivial.
+
+### Refusals detected by regex
+- **Decision:** `eval/run_eval.py::REFUSAL_RE` matches the pipeline's "I don't know" reply and "does not mention / not provided / cannot determine" phrasings.
+- **Alternatives:** ask the judge whether the answer is a refusal.
+- **Why:** deterministic and free. Every run prints the raw answers, so a misclassification can be checked by eye.
+- **Cost:** a refusal worded some other way is missed, and an answer that mentions something "not included" could count as a refusal.
+
+### Consent items are re-asked with consent
+- **Decision:** when the policy returns REQUIRE_CONSENT, the eval records that and asks again with `allow_sensitive=true`, then judges that answer.
+- **Alternatives:** score the consent prompt itself as the answer.
+- **Why:** it checks both that the policy fires and that the consented answer is right, and it keeps every item paired across the off/minimize arms.
+- **Cost:** under `minimize`, consent items send their value type in clear, so for those items the experiment measures consent, not pseudonymization.
+
+### The judge runs in one fixed privacy mode
+- **Decision:** `llm_as_judge` starts a fresh MINIMIZE context for every verdict, whatever `PRIVACY_MODE` the pipeline ran under.
+- **Alternatives:** judge in whatever mode the run uses.
+- **Why:** the experiment varies only the pipeline, not the grader. The reference and candidate share the judge's context, so equal values get equal placeholders.
+- **Cost:** the judge sees placeholders for PII answers, so it can only check that the right value was copied, not how it's formatted.
+
+### Two full golden runs, one kept in reserve
+- **Decision:** one run per privacy mode (`minimize`, `off`). A 3-item smoke run validated the harness first.
+- **Alternatives:** repeat each arm to average out noise.
+- **Why:** the free tier allows ~5 full runs a day, and tonight's rule is at most 3. One run was kept spare in case one failed.
+- **Cost:** n=1 per arm. Differences of one or two items are within noise; the sign test makes that explicit.
+
+### Paired comparison with an exact sign test
+- **Decision:** pair each question across arms, count flips each way, and run an exact two-sided binomial test on the discordant pairs (equivalent to exact McNemar).
+- **Alternatives:** compare the two accuracies directly; a chi-square test (invalid at these counts).
+- **Why:** the same questions go through both arms, so only the questions that flip carry information about the difference.
+- **Cost:** with ~31 items and few flips it has almost no power. It can tell you "no detectable difference", not "no difference".
+
+### Groq client retries: 6
+- **Decision:** `Groq(max_retries=6)`.
+- **Alternatives:** the SDK default (2); sleeps in the eval loop.
+- **Why:** a full eval run is a burst of ~190 calls against a free-tier tokens-per-minute limit. The SDK waits out Groq's `retry-after` header between attempts.
+- **Cost:** under sustained rate limiting, a live request waits longer before it fails.

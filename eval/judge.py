@@ -1,3 +1,5 @@
+from core.enums import PrivacyMode
+from services import pii
 from services.llm_client import generate
 
 JUDGE_SYSTEM_PROMPT = (
@@ -8,6 +10,10 @@ JUDGE_SYSTEM_PROMPT = (
 
 
 def llm_as_judge(question: str, reference_answer: str, actual_answer: str) -> bool:
+    # A fresh context in one fixed mode, so both arms of the privacy experiment
+    # (PRIVACY_MODE=off vs minimize) are judged identically. Reference and candidate
+    # share the context, so the same value gets the same placeholder in both.
+    pii.start_request(PrivacyMode.MINIMIZE)
     prompt = (
         f"Question: {question}\n\n"
         f"Reference answer: {reference_answer}\n\n"

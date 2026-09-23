@@ -17,7 +17,15 @@ MODEL = "openai/gpt-oss-120b"
 
 
 def _client() -> Groq:
-    return Groq(api_key=get_settings().groq_api_key)
+    # Free-tier rate limits (429) are routine during eval bursts; the SDK waits out
+    # Groq's retry-after header between attempts.
+    return Groq(api_key=get_settings().groq_api_key, max_retries=6)
+
+
+def _sampling() -> dict:
+    # Temperature 0 makes eval runs as repeatable as the API allows. It's not a
+    # guarantee: the provider can still return different outputs for the same input.
+    return {"temperature": 0} if get_settings().eval_mode else {}
 
 
 def _gate(prompt: str, system: str | None, label: str) -> list[dict]:
@@ -37,7 +45,7 @@ def _gate(prompt: str, system: str | None, label: str) -> list[dict]:
 
 def generate(prompt: str, system: str | None = None, label: str = "") -> str:
     messages = _gate(prompt, system, label)
-    response = _client().chat.completions.create(model=MODEL, messages=messages)
+    response = _client().chat.completions.create(model=MODEL, messages=messages, **_sampling())
 
     if response.usage is not None:
         record(
@@ -53,7 +61,9 @@ def generate(prompt: str, system: str | None = None, label: str = "") -> str:
 def generate_stream(prompt: str, system: str | None = None, label: str = ""):
     """Yield restored answer text chunk by chunk as Groq produces it."""
     messages = _gate(prompt, system, label)
-    stream = _client().chat.completions.create(model=MODEL, messages=messages, stream=True)
+    stream = _client().chat.completions.create(
+        model=MODEL, messages=messages, stream=True, **_sampling()
+    )
 
     restorer = pii.StreamRestorer()
     for chunk in stream:
