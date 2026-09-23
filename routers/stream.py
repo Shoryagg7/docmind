@@ -10,11 +10,10 @@ from core.enums import PrivacyAction
 from core.errors import PrivacyBlockedError
 from core.usage import current, start_request
 from schemas.query import QueryRequest
-from services.graph import build_context, build_graph, filter_cited, initial_state
+from services.graph import SYSTEM_PROMPT, build_context, build_graph, filter_cited, initial_state
 from services import pii
 from services.llm_client import generate_stream
 from services.privacy_policy import BLOCK_MESSAGE, begin_request
-from services.rag import SYSTEM_PROMPT
 from services.semantic_cache import get_cached_answer, set_cached_answer
 
 router = APIRouter()

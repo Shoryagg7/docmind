@@ -141,7 +141,7 @@ Then give:
 - the 30-second explanation
 - the practical gotcha
 
-Do not turn this into a long lecture inside the coding session. Deep conceptual explanations belong in `Interview_prep.md` and in the separate teaching assistant.
+Do not turn this into a long lecture inside the coding session. Deep conceptual explanations belong in the separate teaching assistant.
 
 # Scope — locked
 
@@ -188,6 +188,7 @@ If work starts drifting out of scope, stop and say so.
 # Stack
 
 - Python 3.14
+- Microsoft Presidio + spaCy `en_core_web_md` (local PII detection)
 - FastAPI
 - pydantic-settings
 - SQLAlchemy 2.0
@@ -197,7 +198,7 @@ If work starts drifting out of scope, stop and say so.
 - Redis Stack
 - LangGraph
 - Groq
-- `openai/gpt-oss-20b` (superseded `llama-3.3-70b-versatile`, which Groq deprecated/removed — see BUILD_LOG Unit 2)
+- `openai/gpt-oss-120b`
 - sentence-transformers
 - `all-MiniLM-L6-v2`
 - Docker Compose
@@ -240,9 +241,9 @@ A phase is not completed simply because code exists. It is completed only after 
 
 # Documentation responsibilities
 
-Maintain these files:
+Maintain these files (plus `docs/DECISIONS.md` for design decisions and `docs/RESULTS.md` for every measured number):
 
-## `PLAN.md`
+## `docs/PLAN.md`
 
 Tracks implementation progress.
 
@@ -255,9 +256,9 @@ For each unit record:
 - observed result
 - remaining work
 
-Keep it practical. Do not turn `PLAN.md` into a textbook.
+Keep it practical. Do not turn `docs/PLAN.md` into a textbook.
 
-## `BUILD_LOG.md`
+## `docs/BUILD_LOG.md`
 
 At the end of every successfully completed implementation unit append a concise entry containing:
 
@@ -271,33 +272,6 @@ At the end of every successfully completed implementation unit append a concise 
 - whether a new resume claim is now earned
 
 This file exists so the separate teaching assistant can understand exactly what has actually been built.
-
-## `Interview_prep.md`
-
-Update this only at the **end of a completed phase**, not after every tiny coding unit.
-
-Each concept section follows:
-
-## N. <Concept>
-
-**What it is**  
-First-principles explanation.
-
-**Why we chose it**  
-Decision, trade-off, rejected credible alternative.
-
-**Soundbite**  
-Approximately 30 seconds, first person, conversational.
-
-**The gotcha**  
-Subtle implementation/interview failure mode.
-
-**Self-test**  
-3–5 questions, increasing difficulty. Do not include answers.
-
-Sections are numbered contiguously and never renumbered.
-
-Anything important that Shorya could not explain without looking up must eventually receive a section.
 
 # Resume claim rule
 
@@ -338,8 +312,8 @@ If the production-grade answer differs from the portfolio-project answer, explic
 At the beginning of every new coding session:
 
 1. Read `CLAUDE.md`.
-2. Read `PLAN.md` if it exists.
-3. Read the latest entries in `BUILD_LOG.md` if it exists.
+2. Read `docs/PLAN.md` if it exists.
+3. Read the latest entries in `docs/BUILD_LOG.md` if it exists.
 4. Inspect only the files necessary to understand the current unit.
 5. Determine the smallest legitimate next step.
 6. Explain that step and wait for approval.

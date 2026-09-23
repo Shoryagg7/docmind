@@ -1,4 +1,5 @@
 import operator
+import re
 from dataclasses import asdict
 from typing import Annotated, TypedDict
 
@@ -15,11 +16,22 @@ from services import pii
 from services.llm_client import generate
 from services.pii import PLACEHOLDER_INSTRUCTION
 from services.privacy_policy import BLOCK_MESSAGE, begin_request
-from services.rag import CITATION_PATTERN, SYSTEM_PROMPT
 from services.semantic_cache import get_cached_answer, set_cached_answer
 from services.vector_store import search
 
 MAX_RETRIES = 2
+
+CITATION_PATTERN = re.compile(r"\[(\d+)\]")
+
+SYSTEM_PROMPT = (
+    "You are a helpful assistant that answers questions using ONLY the "
+    "provided context below. If the context does not contain the answer, "
+    "say you don't know — do not use outside knowledge. For every claim "
+    "in your answer, cite the source chunk number it came from using "
+    "plain ASCII square brackets ONLY, exactly like [1] or [2] — never "
+    "use any other bracket style (no full-width, no parentheses, no "
+    "superscript). " + PLACEHOLDER_INSTRUCTION
+)
 
 REWRITE_SYSTEM_PROMPT = (
     "You rewrite search queries that failed to retrieve relevant results. "

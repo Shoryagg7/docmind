@@ -23,7 +23,7 @@ Two of those are load-bearing:
 
 **Negation defeats similarity thresholds by construction.** A negated question scores **0.9879** against its positive form, while the paraphrase the cache exists to serve scores **0.9399**. The case that must be *rejected* scores higher than the case that must be *accepted*, so no threshold separates them. The mitigation is a lexical negation guard — deliberately a signal from outside the embedding — and its own residual failure mode ("barred from", 0.9273, no marker) is documented rather than hidden.
 
-**A cache hit bypasses every safety mechanism.** Grounding (Phase 4) and relevance grading (Phase 6) both sit *behind* the cache, so the similarity threshold is a correctness parameter, not a performance knob. At 0.85 the system confidently answers "Toronto" to "what city was Maya Chen **born** in?" — instantly, with a citation.
+**A cache hit bypasses every safety mechanism.** Grounding and relevance grading both sit *behind* the cache, so the similarity threshold is a correctness parameter, not a performance knob. At 0.85 the system confidently answers "Toronto" to "what city was Maya Chen **born** in?" — instantly, with a citation.
 
 ---
 
@@ -117,15 +117,14 @@ Python 3.14 · FastAPI · SQLAlchemy 2.0 (async) + Alembic · PostgreSQL 18 + pg
 ```
 core/       config, db engine, models, errors, redis client, token accounting
 services/   pdf_extractor, chunker, ingest, embedder, vector_store,
-            llm_client, grader, graph (LangGraph), semantic_cache, rag
+            llm_client (the privacy gate), pii, privacy_policy, grader,
+            graph (LangGraph), semantic_cache
 routers/    documents, query, stream
 schemas/    request/response models
 eval/       golden set + LLM-as-judge harness, negation set
 static/     single-page UI
 alembic/    migrations (vector extension, HNSW index, B-tree index)
 ```
-
-`services/rag.py` holds the pre-LangGraph straight-line implementation. It's kept deliberately as the "before" reference — no route calls it.
 
 ---
 
@@ -143,6 +142,6 @@ Stated explicitly, because a portfolio project that claims no weaknesses isn't b
 
 ## Documentation
 
-- **[`PLAN.md`](PLAN.md)** — per-unit implementation record: what, why, command, observed result
-- **[`BUILD_LOG.md`](BUILD_LOG.md)** — per-unit design decisions, failure modes discovered, claims earned
-- **[`Interview_prep.md`](Interview_prep.md)** — 12 concept sections (embeddings → cosine similarity → chunking → HNSW → top-k → grounding → graphs/reducers → self-correction → eval → caching → negation → streaming/cost), each with the decision, the trade-off, the gotcha, and self-test questions
+- **[`docs/DECISIONS.md`](docs/DECISIONS.md)**: design decisions, alternatives, costs
+- **[`docs/RESULTS.md`](docs/RESULTS.md)**: every measured number, with the command that produced it
+- **[`docs/PLAN.md`](docs/PLAN.md)**, **[`docs/BUILD_LOG.md`](docs/BUILD_LOG.md)**: implementation history

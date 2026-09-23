@@ -126,3 +126,11 @@ Each entry: **decision / alternatives / why / cost.** Simplest workable option u
 - **Alternatives:** use NER output as-is; keep a stoplist of known non-names.
 - **Why:** on the demo docs spaCy produced `"Maya Chen\nPersonal"` (a separate placeholder from "Maya Chen") and tagged the word "bin" as a person. Both rules are one line each and easy to justify.
 - **Cost:** capitalized non-names are still hidden ("Starter", "Kafka", "Java", "Cassandra", "Terraform"). They round-trip correctly (the model copies `<PERSON_2>` and it's restored to "Kafka"), but the model can't use what the word means. The privacy-cost experiment measures the effect.
+
+## Cleanup
+
+### Delete `services/rag.py` and `services/cache.py`
+- **Decision:** move the two constants still in use (`SYSTEM_PROMPT`, `CITATION_PATTERN`) into `services/graph.py`, then delete both files.
+- **Alternatives:** keep `rag.py` as a "straight-line baseline for comparison".
+- **Why:** no route, eval or test called either module (`rag.answer_question` or the exact-match `cache.py`). Dead code is one more thing to explain and to keep inside the privacy gate. Git history still has both.
+- **Cost:** there's no runnable non-agentic baseline to compare against.

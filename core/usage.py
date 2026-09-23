@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 logger = logging.getLogger("docmind.usage")
 
-# Confirmed empirically from Groq's 429 response during Phase 7 eval runs:
+# Confirmed empirically from a Groq 429 response during an eval run:
 # "Limit 200000, Used 199707" for openai/gpt-oss-20b on the free tier.
 FREE_TIER_DAILY_TOKENS = 200_000
 
