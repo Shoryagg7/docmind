@@ -10,6 +10,19 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
 
+  # Throwaway database for pytest. tmpfs: nothing survives a restart, and the
+  # dev database above is never touched by the test suite.
+  postgres-test:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: docmind
+      POSTGRES_PASSWORD: docmind
+      POSTGRES_DB: docmind_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql
+
   redis:
     image: redis/redis-stack-server:latest
     ports:

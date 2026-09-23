@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     groq_api_key: str
     database_url: str = "postgresql+asyncpg://docmind:docmind@localhost:5432/docmind"
     redis_url: str = "redis://localhost:6379"
+    # pytest runs against this database (the `postgres-test` compose service),
+    # never against database_url. See tests/conftest.py.
+    test_database_url: str = "postgresql+asyncpg://docmind:docmind@localhost:5433/docmind_test"
 
 
 @lru_cache

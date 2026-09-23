@@ -61,15 +61,16 @@ Two of those are load-bearing:
 ## Quick start
 
 ```bash
-# 1. services
-docker compose up -d postgres redis
+# 1. services (postgres-test is the throwaway database pytest uses)
+docker compose up -d postgres postgres-test redis
 
 # 2. environment
-python -m venv .venv && .venv/bin/pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env        # then add your GROQ_API_KEY
 
-# 3. schema
+# 3. schema + demo documents
 .venv/bin/alembic upgrade head
+.venv/bin/python -m scripts.seed_demo
 
 # 4. run
 .venv/bin/uvicorn main:app --port 8001
@@ -134,7 +135,6 @@ Stated explicitly, because a portfolio project that claims no weaknesses isn't b
 
 - **Semantic negation defeats the cache guard.** Lexically marked negation ("not", "aren't") is caught; vocabulary-level negation ("barred from", 0.9273) is not. A real fix needs a cross-encoder or an LLM verification step on hits — which costs the latency the cache exists to save.
 - **Cache errors are swallowed silently.** Redis being down degrades to a cache miss (correct — a cache must never take down the API), but nothing logs or alerts, so a permanently dead Redis is invisible and looks identical to an empty cache.
-- **Tests share the dev database.** `tests/test_vector_store.py` truncates and reseeds `chunks`; running the full suite destroys uploaded documents. Needs a separate test database.
 - **Citations are prompt-instructed, not verified.** Nothing checks that a cited chunk actually supports the claim attached to it. The model has also been observed emitting full-width `【1】` brackets, which a fallback absorbs.
 - **Single-user, no auth.** Out of scope by design.
 - **Free-tier quota is the practical ceiling.** ~163 queries or ~5 full eval runs per day at measured token cost.
