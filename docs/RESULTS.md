@@ -1,9 +1,30 @@
 # Results
 
 Every number in the README comes from a command in this file, run on the current code.
-The raw output is pasted as printed. Nothing is paraphrased.
+Output is pasted as printed. The only edits are removed noise lines (progress bars,
+library warnings), and each section says where it removed them.
 
 Machine: Ubuntu, 8 CPU cores, 14 GB RAM, no GPU. Python 3.14.4. LLM: Groq `openai/gpt-oss-120b`.
+
+### Where each README number comes from
+
+The README rounds raw values to 2–3 decimal places.
+
+| README number | Raw value | Section below |
+|---|---|---|
+| recall@1 19/27, recall@3 27/27, MRR@5 0.840 | same | Retrieval |
+| 4/4 refused, 1/27 wrongly refused, 30/31, 29/31, consent 2/2 / 0 | same | Golden set, runs 1 and 2 |
+| off 29/31 includes a judge error | the `[FAIL]` on the emergency-contact phone, whose answer is the correct +91 90000 00002 | Golden set, run 2 |
+| 28 both pass / 1 lost / 2 gained, p = 1.000 | same | Privacy cost experiment |
+| tokens 1741.0 → 1847.6 (+106.6), "~6%" | 1740.97 → 1847.55, +106.58; 106.58 / 1740.97 = 6.1% | Privacy cost experiment |
+| latency 12.03 s → 12.32 s (+0.28 s) | same | Privacy cost experiment |
+| 25 restores / 0 failures | same | Privacy cost experiment |
+| grading 72.7%, generate 23.1%, rewrite 4.2% | same | Token share |
+| "1.7–1.8k tokens per question", "54–57k per run" | means 1740.97 / 1847.55; totals 53970 / 57274 | Golden set, Privacy cost |
+| cache 2.58 s vs 0.017 s vs 0.021 s | 2.578793 s, 0.016756 s, 0.020681 s | Semantic cache latency |
+| 0.9879, 0.9399, 0.8754, 0.8718, 0.9262, 0.9654, 0.8693 | same | Semantic-cache threshold probe |
+| 0.8728 vs 0.4692 | same | Negation |
+| spaCy sm 2/6, md 5/6 names found | counted from the probe output | spaCy model choice |
 
 ## spaCy model choice for PERSON detection (probe, not a benchmark)
 

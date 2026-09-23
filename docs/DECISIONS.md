@@ -25,7 +25,7 @@ Each entry: **decision / alternatives / why / cost.** Simplest workable option u
 ### Medium spaCy model (`en_core_web_md`)
 - **Decision:** Presidio uses `en_core_web_md`, installed from `requirements.txt` via its GitHub wheel URL.
 - **Alternatives:** `en_core_web_sm` (smaller); `en_core_web_lg` (Presidio's default); a transformer model.
-- **Why:** on a 7-sentence probe (docs/RESULTS.md), `sm` found the fictional name in 2 of the 7 sentences and `md` in 5. `lg` also found 5 and caught one more first-name mention, but it tagged more non-people ("Tamarind Labs", "Flink") as PERSON and is a much larger download.
+- **Why:** on a 7-sentence probe (docs/RESULTS.md), 6 sentences contain a name. `sm` found 2 of 6, `md` found 5 of 6, and `lg` found 6 of 6. False PERSON tags: `sm` 3, `md` 1, `lg` 3. `lg` has the best recall. The one name only it caught was a bare first name in a question ("What is Ananya's work email?"). In the pipeline, that question always goes out in the same prompt as a chunk containing the full name, and the known-value sweep (below) then replaces "Ananya" too. `md` was chosen for fewer false positives and a smaller download.
 - **Cost:** it still misses some names (e.g. a bare first name in a question) and tags some product names ("Kafka") as PERSON. A miss goes to Groq in clear. A false positive hides a harmless word from the model.
 
 ## Testing
